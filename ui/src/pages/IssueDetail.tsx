@@ -10,6 +10,7 @@ import { projectsApi } from "../api/projects";
 import { useCompany } from "../context/CompanyContext";
 import { usePanel } from "../context/PanelContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
+import { useDialog } from "../context/DialogContext";
 import { queryKeys } from "../lib/queryKeys";
 import { useProjectOrder } from "../hooks/useProjectOrder";
 import { relativeTime, cn, formatTokens } from "../lib/utils";
@@ -40,6 +41,7 @@ import {
   MessageSquare,
   MoreHorizontal,
   Paperclip,
+  Plus,
   SlidersHorizontal,
   Trash2,
 } from "lucide-react";
@@ -148,6 +150,7 @@ export function IssueDetail() {
   const { selectedCompanyId } = useCompany();
   const { openPanel, closePanel, panelVisible, setPanelVisible } = usePanel();
   const { setBreadcrumbs } = useBreadcrumbs();
+  const { openNewIssue } = useDialog();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -289,6 +292,14 @@ export function IssueDetail() {
       .filter((i) => i.parentId === issue.id)
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }, [allIssues, issue]);
+
+  const childIssueCounts = useMemo(() => {
+    if (childIssues.length === 0) return null;
+    const done = childIssues.filter(
+      (c) => c.status === "done" || c.status === "cancelled"
+    ).length;
+    return { total: childIssues.length, done };
+  }, [childIssues]);
 
   const commentReassignOptions = useMemo(() => {
     const options: Array<{ id: string; label: string; searchText?: string }> = [];
@@ -782,6 +793,18 @@ export function IssueDetail() {
           <TabsTrigger value="subissues" className="gap-1.5">
             <ListTree className="h-3.5 w-3.5" />
             Sub-issues
+            {childIssueCounts && (
+              <span
+                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+                  childIssueCounts.done === childIssueCounts.total
+                    ? "border-green-500/40 text-green-600 dark:text-green-400 bg-green-500/10"
+                    : "border-border text-muted-foreground bg-muted/40"
+                }`}
+                title={`${childIssueCounts.done} of ${childIssueCounts.total} sub-issues done`}
+              >
+                ⊞ {childIssueCounts.done}/{childIssueCounts.total}
+              </span>
+            )}
           </TabsTrigger>
           <TabsTrigger value="activity" className="gap-1.5">
             <ActivityIcon className="h-3.5 w-3.5" />
@@ -819,34 +842,72 @@ export function IssueDetail() {
         </TabsContent>
 
         <TabsContent value="subissues">
-          {childIssues.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No sub-issues.</p>
-          ) : (
-            <div className="border border-border rounded-lg divide-y divide-border">
-              {childIssues.map((child) => (
-                <Link
-                  key={child.id}
-                  to={`/issues/${child.identifier ?? child.id}`}
-                  className="flex items-center justify-between px-3 py-2 text-sm hover:bg-accent/20 transition-colors"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <StatusIcon status={child.status} />
-                    <PriorityIcon priority={child.priority} />
-                    <span className="font-mono text-muted-foreground shrink-0">
-                      {child.identifier ?? child.id.slice(0, 8)}
+          <div className="space-y-2">
+            {childIssues.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No sub-issues.</p>
+            ) : (
+              <div className="space-y-2">
+                {childIssueCounts && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="shrink-0">
+                      {childIssueCounts.done} of {childIssueCounts.total} completed
                     </span>
-                    <span className="truncate">{child.title}</span>
+                    <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          childIssueCounts.done === childIssueCounts.total
+                            ? "bg-green-500"
+                            : "bg-primary"
+                        }`}
+                        style={{
+                          width: `${(childIssueCounts.done / childIssueCounts.total) * 100}%`,
+                        }}
+                      />
+                    </div>
                   </div>
-                  {child.assigneeAgentId && (() => {
-                    const name = agentMap.get(child.assigneeAgentId)?.name;
-                    return name
-                      ? <Identity name={name} size="sm" />
-                      : <span className="text-muted-foreground font-mono">{child.assigneeAgentId.slice(0, 8)}</span>;
-                  })()}
-                </Link>
-              ))}
-            </div>
-          )}
+                )}
+                <div className="border border-border rounded-lg divide-y divide-border">
+                  {childIssues.map((child) => (
+                    <Link
+                      key={child.id}
+                      to={`/issues/${child.identifier ?? child.id}`}
+                      className="flex items-center justify-between px-3 py-2 text-sm hover:bg-accent/20 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <StatusIcon status={child.status} />
+                        <PriorityIcon priority={child.priority} />
+                        <span className="font-mono text-muted-foreground shrink-0">
+                          {child.identifier ?? child.id.slice(0, 8)}
+                        </span>
+                        <span className="truncate">{child.title}</span>
+                      </div>
+                      {child.assigneeAgentId && (() => {
+                        const name = agentMap.get(child.assigneeAgentId)?.name;
+                        return name
+                          ? <Identity name={name} size="sm" />
+                          : <span className="text-muted-foreground font-mono">{child.assigneeAgentId.slice(0, 8)}</span>;
+                      })()}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full text-muted-foreground"
+              onClick={() =>
+                openNewIssue({
+                  parentId: issue.id,
+                  ...(issue.projectId ? { projectId: issue.projectId } : {}),
+                  ...(issue.goalId ? { goalId: issue.goalId } : {}),
+                })
+              }
+            >
+              <Plus className="h-3.5 w-3.5 mr-1.5" />
+              Create sub-issue
+            </Button>
+          </div>
         </TabsContent>
 
         <TabsContent value="activity">
