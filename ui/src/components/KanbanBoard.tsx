@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { Link } from "@/lib/router";
 import {
   DndContext,
@@ -20,6 +20,7 @@ import {
 import { StatusIcon } from "./StatusIcon";
 import { PriorityIcon } from "./PriorityIcon";
 import { Identity } from "./Identity";
+import { SubtaskBadge, SubtaskList, type SubtaskCounts } from "./IssuesList";
 import type { Issue } from "@paperclipai/shared";
 
 const boardStatuses = [
@@ -43,8 +44,11 @@ interface Agent {
 
 interface KanbanBoardProps {
   issues: Issue[];
+  allIssues?: Issue[];
   agents?: Agent[];
   liveIssueIds?: Set<string>;
+  subtaskCountMap?: Map<string, SubtaskCounts>;
+  subtaskMap?: Map<string, Issue[]>;
   onUpdateIssue: (id: string, data: Record<string, unknown>) => void;
 }
 
@@ -55,11 +59,19 @@ function KanbanColumn({
   issues,
   agents,
   liveIssueIds,
+  subtaskCountMap,
+  subtaskMap,
+  expandedSubtasks,
+  onToggleSubtasks,
 }: {
   status: string;
   issues: Issue[];
   agents?: Agent[];
   liveIssueIds?: Set<string>;
+  subtaskCountMap?: Map<string, SubtaskCounts>;
+  subtaskMap?: Map<string, Issue[]>;
+  expandedSubtasks: Set<string>;
+  onToggleSubtasks: (id: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
 
@@ -90,6 +102,10 @@ function KanbanColumn({
               issue={issue}
               agents={agents}
               isLive={liveIssueIds?.has(issue.id)}
+              subtaskCounts={subtaskCountMap?.get(issue.id)}
+              subtasks={subtaskMap?.get(issue.id)}
+              isExpanded={expandedSubtasks.has(issue.id)}
+              onToggleSubtasks={onToggleSubtasks}
             />
           ))}
         </SortableContext>
@@ -105,11 +121,19 @@ function KanbanCard({
   agents,
   isLive,
   isOverlay,
+  subtaskCounts,
+  subtasks,
+  isExpanded,
+  onToggleSubtasks,
 }: {
   issue: Issue;
   agents?: Agent[];
   isLive?: boolean;
   isOverlay?: boolean;
+  subtaskCounts?: SubtaskCounts;
+  subtasks?: Issue[];
+  isExpanded?: boolean;
+  onToggleSubtasks?: (id: string) => void;
 }) {
   const {
     attributes,
@@ -160,7 +184,7 @@ function KanbanCard({
           )}
         </div>
         <p className="text-sm leading-snug line-clamp-2 mb-2">{issue.title}</p>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <PriorityIcon priority={issue.priority} />
           {issue.assigneeAgentId && (() => {
             const name = agentName(issue.assigneeAgentId);
@@ -172,8 +196,28 @@ function KanbanCard({
               </span>
             );
           })()}
+          {subtaskCounts && <SubtaskBadge counts={subtaskCounts} />}
         </div>
       </Link>
+      {subtasks && subtasks.length > 0 && onToggleSubtasks && (
+        <div>
+          <button
+            className="flex items-center gap-1 px-2 pt-1.5 pb-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors w-full text-left"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSubtasks(issue.id);
+            }}
+          >
+            <span>{isExpanded ? "⬆️" : "⬇️"}</span>
+            <span>Subtasks ({subtasks.length})</span>
+          </button>
+          {isExpanded && (
+            <div className="px-1 pb-1.5">
+              <SubtaskList subtasks={subtasks} />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -184,9 +228,21 @@ export function KanbanBoard({
   issues,
   agents,
   liveIssueIds,
+  subtaskCountMap,
+  subtaskMap,
   onUpdateIssue,
 }: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [expandedSubtasks, setExpandedSubtasks] = useState<Set<string>>(new Set());
+
+  const toggleSubtasks = useCallback((id: string) => {
+    setExpandedSubtasks((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -261,6 +317,10 @@ export function KanbanBoard({
             issues={columnIssues[status] ?? []}
             agents={agents}
             liveIssueIds={liveIssueIds}
+            subtaskCountMap={subtaskCountMap}
+            subtaskMap={subtaskMap}
+            expandedSubtasks={expandedSubtasks}
+            onToggleSubtasks={toggleSubtasks}
           />
         ))}
       </div>
