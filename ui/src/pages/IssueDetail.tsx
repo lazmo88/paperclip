@@ -857,27 +857,29 @@ export function IssueDetail() {
                     </div>
                   </div>
                 )}
-                <div className="border border-border rounded-lg divide-y divide-border">
+                <div className="space-y-1.5">
                   {childIssues.map((child) => (
                     <Link
                       key={child.id}
                       to={`/issues/${child.identifier ?? child.id}`}
-                      className="flex items-center justify-between px-3 py-2 text-sm hover:bg-accent/20 transition-colors"
+                      className="block rounded-md border bg-card p-2.5 hover:shadow-sm transition-shadow no-underline text-inherit"
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <StatusIcon status={child.status} />
-                        <PriorityIcon priority={child.priority} />
-                        <span className="font-mono text-muted-foreground shrink-0">
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <span className="text-xs text-muted-foreground font-mono shrink-0">
                           {child.identifier ?? child.id.slice(0, 8)}
                         </span>
-                        <span className="truncate">{child.title}</span>
                       </div>
-                      {child.assigneeAgentId && (() => {
-                        const name = agentMap.get(child.assigneeAgentId)?.name;
-                        return name
-                          ? <Identity name={name} size="sm" />
-                          : <span className="text-muted-foreground font-mono">{child.assigneeAgentId.slice(0, 8)}</span>;
-                      })()}
+                      <p className="text-sm leading-snug line-clamp-2 mb-2">{child.title}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <StatusIcon status={child.status} />
+                        <PriorityIcon priority={child.priority} />
+                        {child.assigneeAgentId && (() => {
+                          const name = agentMap.get(child.assigneeAgentId)?.name;
+                          return name
+                            ? <Identity name={name} size="xs" />
+                            : <span className="text-xs text-muted-foreground font-mono">{child.assigneeAgentId.slice(0, 8)}</span>;
+                        })()}
+                      </div>
                     </Link>
                   ))}
                 </div>
