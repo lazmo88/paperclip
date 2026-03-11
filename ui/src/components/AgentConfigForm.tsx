@@ -661,6 +661,8 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                       ? "codex"
                       : adapterType === "gemini_local"
                         ? "gemini"
+                      : adapterType === "qwen_local"
+                        ? "qwen"
                       : adapterType === "cursor"
                         ? "agent"
                         : adapterType === "opencode_local"
