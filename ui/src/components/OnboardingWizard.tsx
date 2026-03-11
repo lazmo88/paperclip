@@ -56,6 +56,7 @@ type AdapterType =
   | "gemini_local"
   | "opencode_local"
   | "pi_local"
+  | "qwen_local"
   | "cursor"
   | "process"
   | "http"
@@ -685,6 +686,12 @@ export function OnboardingWizard() {
                           desc: "Local Pi agent"
                         },
                         {
+                          value: "qwen_local" as const,
+                          label: "Qwen Code",
+                          icon: Terminal,
+                          desc: "Local Qwen agent"
+                        },
+                        {
                           value: "openclaw_gateway" as const,
                           label: "OpenClaw Gateway",
                           icon: Bot,
@@ -754,6 +761,7 @@ export function OnboardingWizard() {
                     adapterType === "gemini_local" ||
                     adapterType === "opencode_local" ||
                     adapterType === "pi_local" ||
+                    adapterType === "qwen_local" ||
                     adapterType === "cursor") && (
                     <div className="space-y-3">
                       <div>
