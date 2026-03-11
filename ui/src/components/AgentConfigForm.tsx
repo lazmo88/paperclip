@@ -22,7 +22,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { FolderOpen, Heart, ChevronDown, X } from "lucide-react";
+import { FolderOpen, Heart, ChevronDown, X, Users } from "lucide-react";
+import { AgentIcon } from "./AgentIconPicker";
 import { cn } from "../lib/utils";
 import { extractModelName, extractProviderId } from "../lib/model-utils";
 import { queryKeys } from "../lib/queryKeys";
@@ -188,6 +189,14 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
       return assetsApi.uploadImage(selectedCompanyId, file, namespace);
     },
   });
+
+  const { data: allAgents = [] } = useQuery({
+    queryKey: selectedCompanyId ? queryKeys.agents.list(selectedCompanyId) : ["agents", "none"],
+    queryFn: () => agentsApi.list(selectedCompanyId!),
+    enabled: Boolean(selectedCompanyId) && !isCreate,
+  });
+
+  const [reportsToOpen, setReportsToOpen] = useState(false);
 
   // ---- Edit mode: overlay for dirty tracking ----
   const [overlay, setOverlay] = useState<Overlay>(emptyOverlay);
@@ -432,6 +441,63 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                   return asset.contentPath;
                 }}
               />
+            </Field>
+            <Field label="Reports To" hint={help.reportsTo}>
+              {(() => {
+                const currentReportsTo = eff("identity", "reportsTo", props.agent.reportsTo ?? null) as string | null;
+                const selectedAgent = allAgents.find((a) => a.id === currentReportsTo) ?? null;
+                const eligibleAgents = allAgents.filter((a) => a.id !== props.agent.id);
+                return (
+                  <Popover open={reportsToOpen} onOpenChange={setReportsToOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 w-full rounded-md border border-border px-2.5 py-1.5 text-sm hover:bg-accent/50 transition-colors"
+                      >
+                        {selectedAgent ? (
+                          <>
+                            <AgentIcon icon={selectedAgent.icon} className="shrink-0 h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="flex-1 text-left truncate">{selectedAgent.name}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Users className="shrink-0 h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="flex-1 text-left text-muted-foreground">Nobody (top-level)</span>
+                          </>
+                        )}
+                        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-56 p-1" align="start">
+                      <button
+                        type="button"
+                        className={cn(
+                          "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50",
+                          !currentReportsTo && "bg-accent"
+                        )}
+                        onClick={() => { mark("identity", "reportsTo", null); setReportsToOpen(false); }}
+                      >
+                        <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        Nobody (top-level)
+                      </button>
+                      {eligibleAgents.map((a) => (
+                        <button
+                          key={a.id}
+                          type="button"
+                          className={cn(
+                            "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 truncate",
+                            a.id === currentReportsTo && "bg-accent"
+                          )}
+                          onClick={() => { mark("identity", "reportsTo", a.id); setReportsToOpen(false); }}
+                        >
+                          <AgentIcon icon={a.icon} className="shrink-0 h-3.5 w-3.5 text-muted-foreground" />
+                          {a.name}
+                        </button>
+                      ))}
+                    </PopoverContent>
+                  </Popover>
+                );
+              })()}
             </Field>
             {isLocal && (
               <Field label="Prompt Template" hint={help.promptTemplate}>
