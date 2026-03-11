@@ -17,6 +17,7 @@ import {
 } from "@paperclipai/adapter-codex-local";
 import { DEFAULT_CURSOR_LOCAL_MODEL } from "@paperclipai/adapter-cursor-local";
 import { DEFAULT_GEMINI_LOCAL_MODEL } from "@paperclipai/adapter-gemini-local";
+import { DEFAULT_QWEN_LOCAL_MODEL } from "@paperclipai/adapter-qwen-local";
 import {
   Popover,
   PopoverContent,
@@ -149,12 +150,29 @@ const cursorModeOptions = [
   { id: "ask", label: "Ask" },
 ] as const;
 
+const qwenApprovalModeOptions = [
+  { id: "", label: "Auto" },
+  { id: "plan", label: "Plan" },
+  { id: "auto_edit", label: "Auto edit" },
+  { id: "yolo", label: "Yolo" },
+] as const;
+
 const claudeThinkingEffortOptions = [
   { id: "", label: "Auto" },
   { id: "low", label: "Low" },
   { id: "medium", label: "Medium" },
   { id: "high", label: "High" },
 ] as const;
+
+const LOCAL_ADAPTER_TYPES = new Set<string>([
+  "claude_local",
+  "codex_local",
+  "gemini_local",
+  "opencode_local",
+  "pi_local",
+  "qwen_local",
+  "cursor",
+] as const);
 
 
 /* ---- Form ---- */
@@ -280,13 +298,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
   const adapterType = isCreate
     ? props.values.adapterType
     : overlay.adapterType ?? props.agent.adapterType;
-  const isLocal =
-    adapterType === "claude_local" ||
-    adapterType === "codex_local" ||
-    adapterType === "gemini_local" ||
-    adapterType === "qwen_local" ||
-    adapterType === "opencode_local" ||
-    adapterType === "cursor";
+  const isLocal = LOCAL_ADAPTER_TYPES.has(adapterType);
   const uiAdapter = useMemo(() => getUIAdapter(adapterType), [adapterType]);
 
   // Fetch adapter models for the effective adapter type
@@ -358,6 +370,8 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
         ? "mode"
         : adapterType === "opencode_local"
           ? "variant"
+          : adapterType === "qwen_local"
+            ? "approvalMode"
           : "effort";
   const thinkingEffortOptions =
     adapterType === "codex_local"
@@ -366,6 +380,8 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
         ? cursorModeOptions
         : adapterType === "opencode_local"
           ? openCodeThinkingEffortOptions
+          : adapterType === "qwen_local"
+            ? qwenApprovalModeOptions
           : claudeThinkingEffortOptions;
   const currentThinkingEffort = isCreate
     ? val!.thinkingEffort
@@ -379,6 +395,8 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
         ? eff("adapterConfig", "mode", String(config.mode ?? ""))
       : adapterType === "opencode_local"
         ? eff("adapterConfig", "variant", String(config.variant ?? ""))
+      : adapterType === "qwen_local"
+        ? eff("adapterConfig", "approvalMode", String(config.approvalMode ?? ""))
       : eff("adapterConfig", "effort", String(config.effort ?? ""));
   const showThinkingEffort = adapterType !== "gemini_local";
   const codexSearchEnabled = adapterType === "codex_local"
@@ -500,6 +518,8 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                       DEFAULT_CODEX_LOCAL_BYPASS_APPROVALS_AND_SANDBOX;
                   } else if (t === "gemini_local") {
                     nextValues.model = DEFAULT_GEMINI_LOCAL_MODEL;
+                  } else if (t === "qwen_local") {
+                    nextValues.model = DEFAULT_QWEN_LOCAL_MODEL;
                   } else if (t === "cursor") {
                     nextValues.model = DEFAULT_CURSOR_LOCAL_MODEL;
                   } else if (t === "opencode_local") {
@@ -518,10 +538,13 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                           ? DEFAULT_CODEX_LOCAL_MODEL
                           : t === "gemini_local"
                             ? DEFAULT_GEMINI_LOCAL_MODEL
+                          : t === "qwen_local"
+                            ? DEFAULT_QWEN_LOCAL_MODEL
                           : t === "cursor"
                             ? DEFAULT_CURSOR_LOCAL_MODEL
                           : "",
                       effort: "",
+                      approvalMode: "",
                       modelReasoningEffort: "",
                       variant: "",
                       mode: "",
@@ -914,7 +937,7 @@ function AdapterEnvironmentResult({ result }: { result: AdapterEnvironmentTestRe
 
 /* ---- Internal sub-components ---- */
 
-const ENABLED_ADAPTER_TYPES = new Set(["claude_local", "codex_local", "gemini_local", "opencode_local", "qwen_local", "cursor"]);
+const ENABLED_ADAPTER_TYPES = LOCAL_ADAPTER_TYPES;
 
 /** Display list includes all real adapter types plus UI-only coming-soon entries. */
 const ADAPTER_DISPLAY_LIST: { value: string; label: string; comingSoon: boolean }[] = [

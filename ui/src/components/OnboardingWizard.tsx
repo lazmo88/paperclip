@@ -26,6 +26,7 @@ import {
 } from "@paperclipai/adapter-codex-local";
 import { DEFAULT_CURSOR_LOCAL_MODEL } from "@paperclipai/adapter-cursor-local";
 import { DEFAULT_GEMINI_LOCAL_MODEL } from "@paperclipai/adapter-gemini-local";
+import { DEFAULT_QWEN_LOCAL_MODEL } from "@paperclipai/adapter-qwen-local";
 import { AsciiArtAnimation } from "./AsciiArtAnimation";
 import { ChoosePathButton } from "./PathInstructionsModal";
 import { HintIcon } from "./agent-config-primitives";
@@ -173,6 +174,8 @@ export function OnboardingWizard() {
     adapterType === "codex_local" ||
     adapterType === "gemini_local" ||
     adapterType === "opencode_local" ||
+    adapterType === "pi_local" ||
+    adapterType === "qwen_local" ||
     adapterType === "cursor";
   const effectiveAdapterCommand =
     command.trim() ||
@@ -180,9 +183,11 @@ export function OnboardingWizard() {
       ? "codex"
       : adapterType === "gemini_local"
         ? "gemini"
+      : adapterType === "qwen_local"
+        ? "qwen"
       : adapterType === "cursor"
         ? "agent"
-        : adapterType === "opencode_local"
+      : adapterType === "opencode_local"
           ? "opencode"
           : "claude");
 
@@ -280,6 +285,8 @@ export function OnboardingWizard() {
           ? model || DEFAULT_CODEX_LOCAL_MODEL
           : adapterType === "gemini_local"
             ? model || DEFAULT_GEMINI_LOCAL_MODEL
+          : adapterType === "qwen_local"
+            ? model || DEFAULT_QWEN_LOCAL_MODEL
           : adapterType === "cursor"
             ? model || DEFAULT_CURSOR_LOCAL_MODEL
           : model,
@@ -721,20 +728,23 @@ export function OnboardingWizard() {
                             if (opt.comingSoon) return;
                             const nextType = opt.value as AdapterType;
                             setAdapterType(nextType);
-                            if (nextType === "codex_local" && !model) {
-                              setModel(DEFAULT_CODEX_LOCAL_MODEL);
-                            } else if (nextType === "gemini_local" && !model) {
-                              setModel(DEFAULT_GEMINI_LOCAL_MODEL);
-                            } else if (nextType === "cursor" && !model) {
-                              setModel(DEFAULT_CURSOR_LOCAL_MODEL);
-                            }
                             if (nextType === "opencode_local") {
                               if (!model.includes("/")) {
                                 setModel("");
                               }
                               return;
                             }
-                            setModel("");
+                            if (nextType === "codex_local") {
+                              setModel(DEFAULT_CODEX_LOCAL_MODEL);
+                            } else if (nextType === "gemini_local") {
+                              setModel(DEFAULT_GEMINI_LOCAL_MODEL);
+                            } else if (nextType === "qwen_local") {
+                              setModel(DEFAULT_QWEN_LOCAL_MODEL);
+                            } else if (nextType === "cursor") {
+                              setModel(DEFAULT_CURSOR_LOCAL_MODEL);
+                            } else {
+                              setModel("");
+                            }
                           }}
                         >
                           {opt.recommended && (
@@ -932,6 +942,8 @@ export function OnboardingWizard() {
                             ? `${effectiveAdapterCommand} -p --mode ask --output-format json \"Respond with hello.\"`
                             : adapterType === "codex_local"
                             ? `${effectiveAdapterCommand} exec --json -`
+                            : adapterType === "qwen_local"
+                              ? `${effectiveAdapterCommand} -p \"Respond with hello.\" --output-format stream-json`
                             : adapterType === "gemini_local"
                               ? `${effectiveAdapterCommand} --output-format json \"Respond with hello.\"`
                             : adapterType === "opencode_local"
