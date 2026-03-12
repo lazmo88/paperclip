@@ -1,5 +1,79 @@
 import { asNumber, asString, parseJson, parseObject } from "@paperclipai/adapter-utils/server-utils";
 
+/**
+ * Qwen model pricing (USD per token)
+ * Source: https://help.aliyun.com/zh/model-studio/getting-started/models
+ * Note: Prices may change; update this table as needed.
+ */
+const QWEN_MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  // Qwen3 Coder models
+  "qwen3-coder-plus": { input: 0.0000006, output: 0.0000024 },
+  "qwen3-coder-next": { input: 0.0000012, output: 0.0000048 },
+  // Qwen3.5 models
+  "qwen3.5-plus": { input: 0.0000004, output: 0.0000012 },
+  "qwen3.5-turbo": { input: 0.0000003, output: 0.0000006 },
+  // Qwen3 Max models
+  "qwen3-max": { input: 0.000002, output: 0.000008 },
+  "qwen3-max-2026-01-23": { input: 0.000002, output: 0.000008 },
+  // GLM models (Zhipu AI)
+  "glm-4": { input: 0.000014, output: 0.000014 },
+  "glm-4-plus": { input: 0.00005, output: 0.00005 },
+  "glm-4.7": { input: 0.000001, output: 0.000001 },
+  "glm-5": { input: 0.000001, output: 0.000001 },
+  // Kimi models (Moonshot AI)
+  "kimi-k2.5": { input: 0.0000006, output: 0.0000024 },
+  "moonshot-v1-8k": { input: 0.000012, output: 0.000012 },
+  "moonshot-v1-32k": { input: 0.000024, output: 0.000024 },
+  "moonshot-v1-128k": { input: 0.00006, output: 0.00006 },
+  // MiniMax models
+  "MiniMax-M2.5": { input: 0.0000004, output: 0.0000012 },
+  "abab6.5-chat": { input: 0.00003, output: 0.00003 },
+  // DeepSeek models
+  "deepseek-chat": { input: 0.00000014, output: 0.00000028 },
+  "deepseek-coder": { input: 0.00000014, output: 0.00000028 },
+};
+
+/**
+ * Calculate cost from token usage when Qwen doesn't return cost data
+ * (e.g., for Alibaba Coding Plan subscriptions)
+ */
+function calculateCostFromTokens(
+  model: string | null,
+  inputTokens: number,
+  outputTokens: number,
+): number {
+  if (!model || inputTokens === 0) return 0;
+
+  // Try exact match first
+  let pricing = QWEN_MODEL_PRICING[model];
+
+  // Try case-insensitive match
+  if (!pricing) {
+    const lowerModel = model.toLowerCase();
+    for (const [key, value] of Object.entries(QWEN_MODEL_PRICING)) {
+      if (key.toLowerCase() === lowerModel) {
+        pricing = value;
+        break;
+      }
+    }
+  }
+
+  // Try prefix match (e.g., "qwen3-coder-plus-123" matches "qwen3-coder-plus")
+  if (!pricing) {
+    const lowerModel = model.toLowerCase();
+    for (const [key, value] of Object.entries(QWEN_MODEL_PRICING)) {
+      if (lowerModel.startsWith(key.toLowerCase())) {
+        pricing = value;
+        break;
+      }
+    }
+  }
+
+  if (!pricing) return 0;
+
+  return inputTokens * pricing.input + outputTokens * pricing.output;
+}
+
 function textFromUnknown(value: unknown): string {
   if (typeof value === "string") return value.trim();
   if (Array.isArray(value)) {
@@ -114,12 +188,18 @@ export function parseQwenStreamJson(stdout: string) {
     }
   }
 
+  // If no cost was returned (e.g., for subscription plans), calculate from tokens
+  const calculatedCostUsd =
+    costUsd > 0
+      ? costUsd
+      : calculateCostFromTokens(model, usage.inputTokens, usage.outputTokens);
+
   return {
     sessionId,
     model,
     provider,
     usage,
-    costUsd,
+    costUsd: calculatedCostUsd,
     resultJson,
     summary: messages.join("\n\n").trim() || resultSummary,
     errorMessage: errors.length > 0 ? errors.join("\n") : null,
