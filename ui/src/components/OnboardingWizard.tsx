@@ -980,7 +980,7 @@ export function OnboardingWizard() {
                                   : adapterType === "gemini_local"
                                     ? "gemini auth"
                                     : adapterType === "qwen_local"
-                                      ? "qwen login"
+                                      ? "qwen then /auth"
                                   : "opencode auth login"}
                             </span>.
                           </p>
