@@ -61,4 +61,39 @@ describe("qwen parser", () => {
     expect(isQwenUnknownSessionError("", "cannot resume session")).toBe(true);
     expect(isQwenUnknownSessionError("ok", "")).toBe(false);
   });
+
+  it("calculates cost from tokens when costUsd is not returned (subscription plans)", () => {
+    const stdout = [
+      JSON.stringify({ type: "system", subtype: "session_start", sessionId: "qwen-ses-1", model: "qwen3-coder-plus" }),
+      JSON.stringify({
+        type: "result",
+        summary: "completed",
+        usage: { inputTokens: 1000, outputTokens: 500 },
+        // No costUsd - simulates subscription plan
+      }),
+    ].join("\n");
+
+    const parsed = parseQwenStreamJson(stdout);
+    expect(parsed.model).toBe("qwen3-coder-plus");
+    expect(parsed.usage.inputTokens).toBe(1000);
+    expect(parsed.usage.outputTokens).toBe(500);
+    // qwen3-coder-plus: input $0.0000006/token, output $0.0000024/token
+    // Expected: 1000 * 0.0000006 + 500 * 0.0000024 = 0.0006 + 0.0012 = 0.0018
+    expect(parsed.costUsd).toBeCloseTo(0.0018, 6);
+  });
+
+  it("uses returned costUsd when available instead of calculating from tokens", () => {
+    const stdout = [
+      JSON.stringify({ type: "system", subtype: "session_start", sessionId: "qwen-ses-1", model: "qwen3-coder-plus" }),
+      JSON.stringify({
+        type: "result",
+        summary: "completed",
+        usage: { inputTokens: 1000, outputTokens: 500, costUsd: 0.002 },
+      }),
+    ].join("\n");
+
+    const parsed = parseQwenStreamJson(stdout);
+    // Should use the returned cost, not calculate
+    expect(parsed.costUsd).toBe(0.002);
+  });
 });
