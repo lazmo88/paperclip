@@ -1077,10 +1077,9 @@ export function OnboardingWizard() {
                                     ? "GEMINI_API_KEY"
                                     : adapterType === "qwen_local"
                                       ? "DASHSCOPE_API_KEY"
-                                  : "OPENAI_API_KEY"}
+                                    : "OPENAI_API_KEY"}
                               </span>{" "}
-                              in
-                              env or run{" "}
+                              in env or run{" "}
                               <span className="font-mono">
                                 {adapterType === "cursor"
                                   ? "agent login"
@@ -1089,8 +1088,8 @@ export function OnboardingWizard() {
                                     : adapterType === "gemini_local"
                                       ? "gemini auth"
                                       : adapterType === "qwen_local"
-                                        ? "qwen login"
-                                  : "opencode auth login"}
+                                        ? "qwen then /auth"
+                                    : "opencode auth login"}
                               </span>.
                             </p>
                           ) : adapterType === "pi_local" ? (
