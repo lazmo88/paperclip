@@ -160,6 +160,7 @@ export function IssueDetail() {
     cost: false,
   });
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const lastMarkedReadIssueIdRef = useRef<string | null>(null);
 
@@ -664,19 +665,57 @@ export function IssueDetail() {
           className="text-xl font-bold"
         />
 
-        <InlineEditor
-          value={issue.description ?? ""}
-          onSave={(description) => updateIssue.mutate({ description })}
-          as="p"
-          className="text-[15px] leading-7 text-foreground"
-          placeholder="Add a description..."
-          multiline
-          mentions={mentionOptions}
-          imageUploadHandler={async (file) => {
-            const attachment = await uploadAttachment.mutateAsync(file);
-            return attachment.contentPath;
-          }}
-        />
+        {/* Collapsible description for mobile - shows collapsed by default on mobile, expanded on desktop */}
+        <Collapsible
+          open={descriptionExpanded}
+          onOpenChange={setDescriptionExpanded}
+          className="md:opacity-100 md:pointer-events-auto"
+        >
+          <CollapsibleContent
+            forceMount
+            className="data-[state=closed]:hidden md:data-[state=closed]:block"
+          >
+            <InlineEditor
+              value={issue.description ?? ""}
+              onSave={(description) => updateIssue.mutate({ description })}
+              as="p"
+              className="text-[15px] leading-7 text-foreground"
+              placeholder="Add a description..."
+              multiline
+              mentions={mentionOptions}
+              imageUploadHandler={async (file) => {
+                const attachment = await uploadAttachment.mutateAsync(file);
+                return attachment.contentPath;
+              }}
+            />
+          </CollapsibleContent>
+          {/* Show collapsed preview on mobile when not expanded */}
+          <div
+            className="md:hidden data-[state=open]:hidden"
+            data-state={descriptionExpanded ? "open" : "closed"}
+          >
+            <div
+              className="text-[15px] leading-7 text-foreground line-clamp-3 cursor-pointer"
+              onClick={() => setDescriptionExpanded(true)}
+            >
+              {issue.description ? (
+                <span className="text-muted-foreground">{issue.description.slice(0, 200)}{issue.description.length > 200 ? "..." : ""}</span>
+              ) : (
+                <span className="text-muted-foreground italic">Add a description...</span>
+              )}
+            </div>
+            {issue.description && issue.description.length > 0 && (
+              <button
+                type="button"
+                className="text-xs text-muted-foreground hover:text-foreground mt-1 flex items-center gap-1"
+                onClick={() => setDescriptionExpanded(true)}
+              >
+                <ChevronDown className="h-3 w-3" />
+                Show more
+              </button>
+            )}
+          </div>
+        </Collapsible>
       </div>
 
       <div className="space-y-3">
