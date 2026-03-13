@@ -1,6 +1,7 @@
 import type { AdapterConfigFieldsProps } from "../types";
 import {
   Field,
+  ToggleField,
   DraftInput,
 } from "../../components/agent-config-primitives";
 import { ChoosePathButton } from "../../components/PathInstructionsModal";
@@ -19,32 +20,48 @@ export function QwenLocalConfigFields({
   mark,
 }: AdapterConfigFieldsProps) {
   return (
-    <Field
-      label="Agent instructions file"
-      hint={`${instructionsFileHint} Qwen-specific flags such as model, command, env vars, and extra args use the shared form fields.`}
-    >
-      <div className="flex items-center gap-2">
-        <DraftInput
-          value={
-            isCreate
-              ? values!.instructionsFilePath ?? ""
-              : eff(
-                  "adapterConfig",
-                  "instructionsFilePath",
-                  String(config.instructionsFilePath ?? ""),
-                )
-          }
-          onCommit={(v) =>
-            isCreate
-              ? set!({ instructionsFilePath: v })
-              : mark("adapterConfig", "instructionsFilePath", v || undefined)
-          }
-          immediate
-          className={inputClass}
-          placeholder="/absolute/path/to/AGENTS.md"
-        />
-        <ChoosePathButton />
-      </div>
-    </Field>
+    <>
+      <Field
+        label="Agent instructions file"
+        hint={`${instructionsFileHint} Qwen-specific flags such as model, command, env vars, and extra args use the shared form fields.`}
+      >
+        <div className="flex items-center gap-2">
+          <DraftInput
+            value={
+              isCreate
+                ? values!.instructionsFilePath ?? ""
+                : eff(
+                    "adapterConfig",
+                    "instructionsFilePath",
+                    String(config.instructionsFilePath ?? ""),
+                  )
+            }
+            onCommit={(v) =>
+              isCreate
+                ? set!({ instructionsFilePath: v })
+                : mark("adapterConfig", "instructionsFilePath", v || undefined)
+            }
+            immediate
+            className={inputClass}
+            placeholder="/absolute/path/to/AGENTS.md"
+          />
+          <ChoosePathButton />
+        </div>
+      </Field>
+      <ToggleField
+        label="Yolo mode"
+        hint="Run Qwen with --yolo for unattended operation (auto-approve all actions)."
+        checked={
+          isCreate
+            ? values!.dangerouslyBypassSandbox
+            : eff("adapterConfig", "yolo", config.yolo === true)
+        }
+        onChange={(v) =>
+          isCreate
+            ? set!({ dangerouslyBypassSandbox: v })
+            : mark("adapterConfig", "yolo", v)
+        }
+      />
+    </>
   );
 }
