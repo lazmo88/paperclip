@@ -57,9 +57,18 @@ export function buildQwenLocalConfig(v: CreateConfigValues): Record<string, unkn
   if (v.instructionsFilePath) ac.instructionsFilePath = v.instructionsFilePath;
   if (v.promptTemplate) ac.promptTemplate = v.promptTemplate;
   if (v.model) ac.model = v.model;
-  if (v.dangerouslyBypassSandbox) ac.yolo = true;
-  else ac.yolo = DEFAULT_QWEN_LOCAL_YOLO;
-  if (v.thinkingEffort) ac.approvalMode = v.thinkingEffort;
+
+  // Handle yolo/approvalMode sync:
+  // - If thinkingEffort is "yolo", set yolo=true
+  // - If dangerouslyBypassSandbox is true, set yolo=true
+  // - Otherwise, set approvalMode to thinkingEffort if provided
+  const isYolo = v.thinkingEffort === "yolo" || v.dangerouslyBypassSandbox === true;
+  if (isYolo) {
+    ac.yolo = true;
+  } else if (v.thinkingEffort) {
+    ac.approvalMode = v.thinkingEffort;
+  }
+
   ac.timeoutSec = 0;
   ac.graceSec = 20;
   const env = parseEnvBindings(v.envBindings);

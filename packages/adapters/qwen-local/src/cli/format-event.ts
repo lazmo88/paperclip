@@ -77,8 +77,14 @@ export function printQwenStreamEvent(raw: string, debug: boolean): void {
   }
   if (type === "result") {
     const usage = asRecord(parsed.usage);
-    const input = asNumber(usage?.inputTokens, 0) || asNumber(usage?.input_tokens, 0);
-    const output = asNumber(usage?.outputTokens, 0) || asNumber(usage?.output_tokens, 0);
+    const input =
+      asNumber(usage?.inputTokens, 0) ||
+      asNumber(usage?.input_tokens, 0) ||
+      asNumber(usage?.promptTokens, 0);
+    const output =
+      asNumber(usage?.outputTokens, 0) ||
+      asNumber(usage?.output_tokens, 0) ||
+      asNumber(usage?.completionTokens, 0);
     const cost =
       asNumber(usage?.costUsd, 0) ||
       asNumber(usage?.cost_usd, 0) ||

@@ -232,15 +232,16 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   }
 
   const finalSessionId = attempt.parsed.sessionId ?? attempt.sessionId ?? null;
-  const errorMessage =
-    attempt.parsed.errorMessage ??
-    trimmedOrNull(attempt.proc.stderr) ??
-    (attempt.proc.timedOut ? "process timed out" : null);
+  const fallbackErrorMessage =
+    attempt.parsed.errorMessage ||
+    trimmedOrNull(attempt.proc.stderr) ||
+    (attempt.proc.timedOut ? "process timed out" : null) ||
+    ((attempt.proc.exitCode ?? 0) !== 0 ? `process exited with code ${attempt.proc.exitCode}` : null);
   return {
     exitCode: attempt.proc.exitCode,
     signal: attempt.proc.signal,
     timedOut: attempt.proc.timedOut,
-    errorMessage,
+    errorMessage: fallbackErrorMessage,
     usage: attempt.parsed.usage,
     sessionId: finalSessionId,
     sessionParams: sessionParamsFor(cwd, finalSessionId, {
