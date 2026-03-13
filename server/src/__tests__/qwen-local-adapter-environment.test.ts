@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -26,21 +26,38 @@ describe("qwen_local environment diagnostics", () => {
   });
 
   it("warns when auth is missing but command exists", async () => {
-    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-qwen-env-"));
-    const fakeQwen = path.join(cwd, "qwen");
-    await fs.writeFile(fakeQwen, "#!/bin/sh\necho '{\"ok\":true}'\n", "utf8");
-    await fs.chmod(fakeQwen, 0o755);
+    // Stub auth-related env vars to ensure auth is detected as missing
+    const authKeys = [
+      "DASHSCOPE_API_KEY",
+      "BAILIAN_CODING_PLAN_API_KEY",
+      "OPENAI_API_KEY",
+      "QWEN_CODE_API_KEY",
+    ];
+    const originalValues: Record<string, string | undefined> = {};
+    for (const key of authKeys) {
+      originalValues[key] = process.env[key];
+      vi.stubEnv(key, "");
+    }
 
-    const result = await testEnvironment({
-      companyId: "company-1",
-      adapterType: "qwen_local",
-      config: {
-        command: fakeQwen,
-        cwd,
-      },
-    });
+    try {
+      const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-qwen-env-"));
+      const fakeQwen = path.join(cwd, "qwen");
+      await fs.writeFile(fakeQwen, "#!/bin/sh\necho '{\"ok\":true}'\n", "utf8");
+      await fs.chmod(fakeQwen, 0o755);
 
-    expect(result.checks.some((check) => check.code === "qwen_auth_missing")).toBe(true);
-    expect(result.status).toBe("warn");
+      const result = await testEnvironment({
+        companyId: "company-1",
+        adapterType: "qwen_local",
+        config: {
+          command: fakeQwen,
+          cwd,
+        },
+      });
+
+      expect(result.checks.some((check) => check.code === "qwen_auth_missing")).toBe(true);
+      expect(result.status).toBe("warn");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
