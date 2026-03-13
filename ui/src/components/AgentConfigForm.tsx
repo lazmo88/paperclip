@@ -174,6 +174,15 @@ const LOCAL_ADAPTER_TYPES = new Set<string>([
   "cursor",
 ] as const);
 
+const GATEWAY_ADAPTER_TYPES = new Set<string>([
+  "openclaw_gateway",
+] as const);
+
+const ENABLED_ADAPTER_TYPES = new Set<string>([
+  ...LOCAL_ADAPTER_TYPES,
+  ...GATEWAY_ADAPTER_TYPES,
+]);
+
 
 /* ---- Form ---- */
 
@@ -396,7 +405,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
       : adapterType === "opencode_local"
         ? eff("adapterConfig", "variant", String(config.variant ?? ""))
       : adapterType === "qwen_local"
-        ? eff("adapterConfig", "approvalMode", String(config.approvalMode ?? ""))
+        ? eff("adapterConfig", "approvalMode", config.yolo === true ? "yolo" : String(config.approvalMode ?? ""))
       : eff("adapterConfig", "effort", String(config.effort ?? ""));
   const showThinkingEffort = adapterType !== "gemini_local";
   const codexSearchEnabled = adapterType === "codex_local"
@@ -524,7 +533,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                   } else if (t === "gemini_local") {
                     nextValues.model = DEFAULT_GEMINI_LOCAL_MODEL;
                   } else if (t === "qwen_local") {
-                    nextValues.dangerouslyBypassSandbox = DEFAULT_QWEN_LOCAL_YOLO;
+                    nextValues.thinkingEffort = "yolo";
                     nextValues.model = DEFAULT_QWEN_LOCAL_MODEL;
                   } else if (t === "cursor") {
                     nextValues.model = DEFAULT_CURSOR_LOCAL_MODEL;
@@ -699,11 +708,24 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                   <ThinkingEffortDropdown
                     value={currentThinkingEffort}
                     options={thinkingEffortOptions}
-                    onChange={(v) =>
-                      isCreate
-                        ? set!({ thinkingEffort: v })
-                        : mark("adapterConfig", thinkingEffortKey, v || undefined)
-                    }
+                    onChange={(v) => {
+                      if (isCreate) {
+                        set!({ thinkingEffort: v });
+                      } else if (adapterType === "qwen_local") {
+                        // For qwen_local, sync yolo flag with approvalMode
+                        const isYolo = v === "yolo";
+                        setOverlay((prev) => ({
+                          ...prev,
+                          adapterConfig: {
+                            ...prev.adapterConfig,
+                            approvalMode: isYolo ? undefined : (v || undefined),
+                            yolo: isYolo ? true : false,
+                          },
+                        }));
+                      } else {
+                        mark("adapterConfig", thinkingEffortKey, v || undefined);
+                      }
+                    }}
                     open={thinkingEffortOpen}
                     onOpenChange={setThinkingEffortOpen}
                   />
@@ -952,8 +974,6 @@ function AdapterEnvironmentResult({ result }: { result: AdapterEnvironmentTestRe
 }
 
 /* ---- Internal sub-components ---- */
-
-const ENABLED_ADAPTER_TYPES = LOCAL_ADAPTER_TYPES;
 
 /** Display list includes all real adapter types plus UI-only coming-soon entries. */
 const ADAPTER_DISPLAY_LIST: { value: string; label: string; comingSoon: boolean }[] = [
