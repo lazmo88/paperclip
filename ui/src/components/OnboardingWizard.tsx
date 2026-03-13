@@ -1072,7 +1072,7 @@ export function OnboardingWizard() {
                                   : adapterType === "gemini_local"
                                     ? "GEMINI_API_KEY"
                                     : adapterType === "qwen_local"
-                                      ? "DASHSCOPE_API_KEY"
+                                      ? "DASHSCOPE_API_KEY, BAILIAN_CODING_PLAN_API_KEY, OPENAI_API_KEY, or QWEN_CODE_API_KEY"
                                     : "OPENAI_API_KEY"}
                               </span>{" "}
                               in env or run{" "}
