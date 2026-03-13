@@ -54,8 +54,9 @@ async function loadEmbeddedPostgresCtor(): Promise<EmbeddedPostgresCtor> {
   const require = createRequire(import.meta.url);
   const resolveCandidates = [
     path.resolve(fileURLToPath(new URL("../..", import.meta.url))),
-    path.resolve(fileURLToPath(new URL("../../server", import.meta.url))),
-    path.resolve(fileURLToPath(new URL("../../cli", import.meta.url))),
+    path.resolve(fileURLToPath(new URL("../../../server", import.meta.url))),
+    path.resolve(fileURLToPath(new URL("../../../cli", import.meta.url))),
+    path.resolve(fileURLToPath(new URL("../../../", import.meta.url))),
     process.cwd(),
   ];
 

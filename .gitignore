@@ -41,3 +41,6 @@ tmp/
 # Playwright
 tests/e2e/test-results/
 tests/e2e/playwright-report/
+
+# E2E test artifacts
+.paperclip-e2e/

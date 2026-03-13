@@ -26,6 +26,7 @@ import {
 } from "@paperclipai/adapter-codex-local";
 import { DEFAULT_CURSOR_LOCAL_MODEL } from "@paperclipai/adapter-cursor-local";
 import { DEFAULT_GEMINI_LOCAL_MODEL } from "@paperclipai/adapter-gemini-local";
+import { DEFAULT_QWEN_LOCAL_MODEL } from "@paperclipai/adapter-qwen-local";
 import { AsciiArtAnimation } from "./AsciiArtAnimation";
 import { ChoosePathButton } from "./PathInstructionsModal";
 import { HintIcon } from "./agent-config-primitives";
@@ -56,6 +57,7 @@ type AdapterType =
   | "gemini_local"
   | "opencode_local"
   | "pi_local"
+  | "qwen_local"
   | "cursor"
   | "process"
   | "http"
@@ -172,6 +174,8 @@ export function OnboardingWizard() {
     adapterType === "codex_local" ||
     adapterType === "gemini_local" ||
     adapterType === "opencode_local" ||
+    adapterType === "pi_local" ||
+    adapterType === "qwen_local" ||
     adapterType === "cursor";
   const effectiveAdapterCommand =
     command.trim() ||
@@ -179,9 +183,13 @@ export function OnboardingWizard() {
       ? "codex"
       : adapterType === "gemini_local"
         ? "gemini"
+      : adapterType === "pi_local"
+        ? "pi"
+      : adapterType === "qwen_local"
+        ? "qwen"
       : adapterType === "cursor"
         ? "agent"
-        : adapterType === "opencode_local"
+      : adapterType === "opencode_local"
           ? "opencode"
           : "claude");
 
@@ -279,6 +287,8 @@ export function OnboardingWizard() {
           ? model || DEFAULT_CODEX_LOCAL_MODEL
           : adapterType === "gemini_local"
             ? model || DEFAULT_GEMINI_LOCAL_MODEL
+          : adapterType === "qwen_local"
+            ? model || DEFAULT_QWEN_LOCAL_MODEL
           : adapterType === "cursor"
             ? model || DEFAULT_CURSOR_LOCAL_MODEL
           : model,
@@ -685,6 +695,12 @@ export function OnboardingWizard() {
                           desc: "Local Pi agent"
                         },
                         {
+                          value: "qwen_local" as const,
+                          label: "Qwen Code",
+                          icon: Terminal,
+                          desc: "Local Qwen agent"
+                        },
+                        {
                           value: "openclaw_gateway" as const,
                           label: "OpenClaw Gateway",
                           icon: Bot,
@@ -714,20 +730,23 @@ export function OnboardingWizard() {
                             if (opt.comingSoon) return;
                             const nextType = opt.value as AdapterType;
                             setAdapterType(nextType);
-                            if (nextType === "codex_local" && !model) {
-                              setModel(DEFAULT_CODEX_LOCAL_MODEL);
-                            } else if (nextType === "gemini_local" && !model) {
-                              setModel(DEFAULT_GEMINI_LOCAL_MODEL);
-                            } else if (nextType === "cursor" && !model) {
-                              setModel(DEFAULT_CURSOR_LOCAL_MODEL);
-                            }
                             if (nextType === "opencode_local") {
                               if (!model.includes("/")) {
                                 setModel("");
                               }
                               return;
                             }
-                            setModel("");
+                            if (nextType === "codex_local") {
+                              setModel(DEFAULT_CODEX_LOCAL_MODEL);
+                            } else if (nextType === "gemini_local") {
+                              setModel(DEFAULT_GEMINI_LOCAL_MODEL);
+                            } else if (nextType === "qwen_local") {
+                              setModel(DEFAULT_QWEN_LOCAL_MODEL);
+                            } else if (nextType === "cursor") {
+                              setModel(DEFAULT_CURSOR_LOCAL_MODEL);
+                            } else {
+                              setModel("");
+                            }
                           }}
                         >
                           {opt.recommended && (
@@ -754,6 +773,7 @@ export function OnboardingWizard() {
                     adapterType === "gemini_local" ||
                     adapterType === "opencode_local" ||
                     adapterType === "pi_local" ||
+                    adapterType === "qwen_local" ||
                     adapterType === "cursor") && (
                     <div className="space-y-3">
                       <div>
@@ -924,6 +944,10 @@ export function OnboardingWizard() {
                             ? `${effectiveAdapterCommand} -p --mode ask --output-format json \"Respond with hello.\"`
                             : adapterType === "codex_local"
                             ? `${effectiveAdapterCommand} exec --json -`
+                            : adapterType === "pi_local"
+                              ? `${effectiveAdapterCommand} -p "Respond with hello." --mode json${model.includes("/") ? ` --provider ${model.slice(0, model.indexOf("/"))} --model ${model.slice(model.indexOf("/") + 1)}` : model ? ` --model ${model}` : ""} --tools read`
+                            : adapterType === "qwen_local"
+                              ? `${effectiveAdapterCommand} -p \"Respond with hello.\" --output-format stream-json`
                             : adapterType === "gemini_local"
                               ? `${effectiveAdapterCommand} --output-format json \"Respond with hello.\"`
                             : adapterType === "opencode_local"
@@ -934,7 +958,7 @@ export function OnboardingWizard() {
                           Prompt:{" "}
                           <span className="font-mono">Respond with hello.</span>
                         </p>
-                        {adapterType === "cursor" || adapterType === "codex_local" || adapterType === "gemini_local" || adapterType === "opencode_local" ? (
+                        {adapterType === "cursor" || adapterType === "codex_local" || adapterType === "gemini_local" || adapterType === "opencode_local" || adapterType === "qwen_local" ? (
                           <p className="text-muted-foreground">
                             If auth fails, set{" "}
                             <span className="font-mono">
@@ -942,6 +966,8 @@ export function OnboardingWizard() {
                                 ? "CURSOR_API_KEY"
                                 : adapterType === "gemini_local"
                                   ? "GEMINI_API_KEY"
+                                  : adapterType === "qwen_local"
+                                    ? "DASHSCOPE_API_KEY, BAILIAN_CODING_PLAN_API_KEY, OPENAI_API_KEY, or QWEN_CODE_API_KEY"
                                   : "OPENAI_API_KEY"}
                             </span>{" "}
                             in
@@ -953,8 +979,16 @@ export function OnboardingWizard() {
                                   ? "codex login"
                                   : adapterType === "gemini_local"
                                     ? "gemini auth"
+                                    : adapterType === "qwen_local"
+                                      ? "qwen then /auth"
                                   : "opencode auth login"}
                             </span>.
+                          </p>
+                        ) : adapterType === "pi_local" ? (
+                          <p className="text-muted-foreground">
+                            If auth fails, run{" "}
+                            <span className="font-mono">pi --list-models</span>{" "}
+                            to verify provider auth and the configured model.
                           </p>
                         ) : (
                           <p className="text-muted-foreground">
