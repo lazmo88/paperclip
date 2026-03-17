@@ -52,6 +52,7 @@ type AdapterType =
   | "claude_local"
   | "codex_local"
   | "opencode_local"
+  | "qwen_local"
   | "pi_local"
   | "cursor"
   | "process"
@@ -165,13 +166,19 @@ export function OnboardingWizard() {
     enabled: Boolean(createdCompanyId) && onboardingOpen && step === 2
   });
   const isLocalAdapter =
-    adapterType === "claude_local" || adapterType === "codex_local" || adapterType === "opencode_local" || adapterType === "cursor";
+    adapterType === "claude_local" ||
+    adapterType === "codex_local" ||
+    adapterType === "opencode_local" ||
+    adapterType === "qwen_local" ||
+    adapterType === "cursor";
   const effectiveAdapterCommand =
     command.trim() ||
     (adapterType === "codex_local"
       ? "codex"
       : adapterType === "cursor"
         ? "agent"
+        : adapterType === "qwen_local"
+          ? "qwen"
         : adapterType === "opencode_local"
           ? "opencode"
           : "claude");
@@ -662,6 +669,12 @@ export function OnboardingWizard() {
                           desc: "Local multi-provider agent"
                         },
                         {
+                          value: "qwen_local" as const,
+                          label: "Qwen Code",
+                          icon: Terminal,
+                          desc: "Local Qwen coding agent"
+                        },
+                        {
                           value: "pi_local" as const,
                           label: "Pi",
                           icon: Terminal,
@@ -733,6 +746,7 @@ export function OnboardingWizard() {
                   {(adapterType === "claude_local" ||
                     adapterType === "codex_local" ||
                     adapterType === "opencode_local" ||
+                    adapterType === "qwen_local" ||
                     adapterType === "pi_local" ||
                     adapterType === "cursor") && (
                     <div className="space-y-3">
@@ -912,11 +926,18 @@ export function OnboardingWizard() {
                           Prompt:{" "}
                           <span className="font-mono">Respond with hello.</span>
                         </p>
-                        {adapterType === "cursor" || adapterType === "codex_local" || adapterType === "opencode_local" ? (
+                        {adapterType === "cursor" ||
+                        adapterType === "codex_local" ||
+                        adapterType === "opencode_local" ||
+                        adapterType === "qwen_local" ? (
                           <p className="text-muted-foreground">
                             If auth fails, set{" "}
                             <span className="font-mono">
-                              {adapterType === "cursor" ? "CURSOR_API_KEY" : "OPENAI_API_KEY"}
+                              {adapterType === "cursor"
+                                ? "CURSOR_API_KEY"
+                                : adapterType === "qwen_local"
+                                  ? "DASHSCOPE_API_KEY"
+                                  : "OPENAI_API_KEY"}
                             </span>{" "}
                             in
                             env or run{" "}
@@ -925,7 +946,9 @@ export function OnboardingWizard() {
                                 ? "agent login"
                                 : adapterType === "codex_local"
                                   ? "codex login"
-                                  : "opencode auth login"}
+                                  : adapterType === "qwen_local"
+                                    ? "qwen login"
+                                    : "opencode auth login"}
                             </span>.
                           </p>
                         ) : (

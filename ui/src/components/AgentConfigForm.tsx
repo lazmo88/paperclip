@@ -276,6 +276,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
     adapterType === "claude_local" ||
     adapterType === "codex_local" ||
     adapterType === "opencode_local" ||
+    adapterType === "qwen_local" ||
     adapterType === "cursor";
   const uiAdapter = useMemo(() => getUIAdapter(adapterType), [adapterType]);
 
@@ -610,6 +611,8 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                       ? "codex"
                       : adapterType === "cursor"
                         ? "agent"
+                        : adapterType === "qwen_local"
+                          ? "qwen"
                         : adapterType === "opencode_local"
                           ? "opencode"
                           : "claude"
