@@ -22,6 +22,9 @@ import {
   defaultIssueExecutionWorkspaceSettingsForProject,
   parseProjectExecutionWorkspacePolicy,
 } from "./execution-workspace-policy.js";
+import { redactCurrentUserText } from "../log-redaction.js";
+import { resolveIssueGoalId, resolveNextIssueGoalId } from "./issue-goal-fallback.js";
+import { getDefaultCompanyGoal } from "./goals.js";
 
 const ALL_ISSUE_STATUSES = ["backlog", "todo", "in_progress", "in_review", "blocked", "done", "cancelled"];
 
@@ -87,6 +90,13 @@ type IssueUserContextInput = {
   createdAt: Date | string;
   updatedAt: Date | string;
 };
+
+function redactIssueComment<T extends { body: string }>(comment: T): T {
+  return {
+    ...comment,
+    body: redactCurrentUserText(comment.body),
+  };
+}
 
 function sameRunLock(checkoutRunId: string | null, actorRunId: string | null) {
   if (actorRunId) return checkoutRunId === actorRunId;
@@ -641,6 +651,7 @@ export function issueService(db: Db) {
         throw unprocessable("in_progress issues require an assignee");
       }
       return db.transaction(async (tx) => {
+        const defaultCompanyGoal = await getDefaultCompanyGoal(tx, companyId);
         let executionWorkspaceSettings =
           (issueData.executionWorkspaceSettings as Record<string, unknown> | null | undefined) ?? null;
         if (executionWorkspaceSettings == null && issueData.projectId) {
@@ -665,6 +676,11 @@ export function issueService(db: Db) {
 
         const values = {
           ...issueData,
+          goalId: resolveIssueGoalId({
+            projectId: issueData.projectId,
+            goalId: issueData.goalId,
+            defaultGoalId: defaultCompanyGoal?.id ?? null,
+          }),
           ...(executionWorkspaceSettings ? { executionWorkspaceSettings } : {}),
           companyId,
           issueNumber,
@@ -744,6 +760,14 @@ export function issueService(db: Db) {
       }
 
       return db.transaction(async (tx) => {
+        const defaultCompanyGoal = await getDefaultCompanyGoal(tx, existing.companyId);
+        patch.goalId = resolveNextIssueGoalId({
+          currentProjectId: existing.projectId,
+          currentGoalId: existing.goalId,
+          projectId: issueData.projectId,
+          goalId: issueData.goalId,
+          defaultGoalId: defaultCompanyGoal?.id ?? null,
+        });
         const updated = await tx
           .update(issues)
           .set(patch)
@@ -1041,14 +1065,18 @@ export function issueService(db: Db) {
         .select()
         .from(issueComments)
         .where(eq(issueComments.issueId, issueId))
-        .orderBy(desc(issueComments.createdAt)),
+        .orderBy(desc(issueComments.createdAt))
+        .then((comments) => comments.map(redactIssueComment)),
 
     getComment: (commentId: string) =>
       db
         .select()
         .from(issueComments)
         .where(eq(issueComments.id, commentId))
-        .then((rows) => rows[0] ?? null),
+        .then((rows) => {
+          const comment = rows[0] ?? null;
+          return comment ? redactIssueComment(comment) : null;
+        }),
 
     addComment: async (issueId: string, body: string, actor: { agentId?: string; userId?: string }) => {
       const issue = await db
@@ -1059,6 +1087,7 @@ export function issueService(db: Db) {
 
       if (!issue) throw notFound("Issue not found");
 
+      const redactedBody = redactCurrentUserText(body);
       const [comment] = await db
         .insert(issueComments)
         .values({
@@ -1066,7 +1095,7 @@ export function issueService(db: Db) {
           issueId,
           authorAgentId: actor.agentId ?? null,
           authorUserId: actor.userId ?? null,
-          body,
+          body: redactedBody,
         })
         .returning();
 
@@ -1076,7 +1105,7 @@ export function issueService(db: Db) {
         .set({ updatedAt: new Date() })
         .where(eq(issues.id, issueId));
 
-      return comment;
+      return redactIssueComment(comment);
     },
 
     createAttachment: async (input: {

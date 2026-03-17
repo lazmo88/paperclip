@@ -53,6 +53,7 @@ type EmbeddedPostgresCtor = new (opts: {
   password: string;
   port: number;
   persistent: boolean;
+  initdbFlags?: string[];
   onLog?: (message: unknown) => void;
   onError?: (message: unknown) => void;
 }) => EmbeddedPostgresInstance;
@@ -322,7 +323,7 @@ export async function startServer(): Promise<StartedServer> {
     if (runningPid) {
       logger.warn(`Embedded PostgreSQL already running; reusing existing process (pid=${runningPid}, port=${port})`);
     } else {
-      const detectedPort = await detectPort(configuredPort);
+      const detectedPort = await detectPort({ port: configuredPort, hostname: "127.0.0.1" });
       if (detectedPort !== configuredPort) {
         logger.warn(`Embedded PostgreSQL port is in use; using next free port (requestedPort=${configuredPort}, selectedPort=${detectedPort})`);
       }
@@ -334,6 +335,7 @@ export async function startServer(): Promise<StartedServer> {
         password: "paperclip",
         port,
         persistent: true,
+        initdbFlags: ["--encoding=UTF8", "--locale=C"],
         onLog: appendEmbeddedPostgresLog,
         onError: appendEmbeddedPostgresLog,
       });
@@ -460,7 +462,7 @@ export async function startServer(): Promise<StartedServer> {
     authReady = true;
   }
   
-  const listenPort = await detectPort(config.port);
+  const listenPort = await detectPort({ port: config.port, hostname: config.host });
   const uiMode = config.uiDevMiddleware ? "vite-dev" : config.serveUi ? "static" : "none";
   const storageService = createStorageServiceFromConfig(config);
   const app = await createApp(db as any, {

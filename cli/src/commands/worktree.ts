@@ -83,6 +83,7 @@ type EmbeddedPostgresCtor = new (opts: {
   password: string;
   port: number;
   persistent: boolean;
+  initdbFlags?: string[];
   onLog?: (message: unknown) => void;
   onError?: (message: unknown) => void;
 }) => EmbeddedPostgresInstance;
@@ -514,6 +515,7 @@ async function ensureEmbeddedPostgres(dataDir: string, preferredPort: number): P
     password: "paperclip",
     port,
     persistent: true,
+    initdbFlags: ["--encoding=UTF8", "--locale=C"],
     onLog: () => {},
     onError: () => {},
   });

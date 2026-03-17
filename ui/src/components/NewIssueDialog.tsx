@@ -699,7 +699,12 @@ export function NewIssueDialog() {
             }}
             readOnly={createIssue.isPending}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) {
+              if (
+                e.key === "Enter" &&
+                !e.metaKey &&
+                !e.ctrlKey &&
+                !e.nativeEvent.isComposing
+              ) {
                 e.preventDefault();
                 descriptionEditorRef.current?.focus();
               }
@@ -1029,8 +1034,6 @@ export function NewIssueDialog() {
                 </span>
               ) : createIssue.isError ? (
                 <span className="text-xs text-destructive">{createIssueErrorMessage}</span>
-              ) : canDiscardDraft ? (
-                <span className="text-xs text-muted-foreground">Draft autosaves locally</span>
               ) : null}
             </div>
             <Button
