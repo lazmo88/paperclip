@@ -285,6 +285,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
     adapterType === "claude_local" ||
     adapterType === "codex_local" ||
     adapterType === "opencode_local" ||
+    adapterType === "qwen_local" ||
     adapterType === "cursor";
   const uiAdapter = useMemo(() => getUIAdapter(adapterType), [adapterType]);
 
@@ -676,6 +677,8 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                       ? "codex"
                       : adapterType === "cursor"
                         ? "agent"
+                        : adapterType === "qwen_local"
+                          ? "qwen"
                         : adapterType === "opencode_local"
                           ? "opencode"
                           : "claude"
@@ -957,7 +960,13 @@ function AdapterEnvironmentResult({ result }: { result: AdapterEnvironmentTestRe
 
 /* ---- Internal sub-components ---- */
 
-const ENABLED_ADAPTER_TYPES = new Set(["claude_local", "codex_local", "opencode_local", "cursor"]);
+const ENABLED_ADAPTER_TYPES = new Set([
+  "claude_local",
+  "codex_local",
+  "opencode_local",
+  "qwen_local",
+  "cursor",
+]);
 
 /** Display list includes all real adapter types plus UI-only coming-soon entries. */
 const ADAPTER_DISPLAY_LIST: { value: string; label: string; comingSoon: boolean }[] = [

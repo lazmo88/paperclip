@@ -3,6 +3,7 @@ import { printClaudeStreamEvent } from "@paperclipai/adapter-claude-local/cli";
 import { printCodexStreamEvent } from "@paperclipai/adapter-codex-local/cli";
 import { printCursorStreamEvent } from "@paperclipai/adapter-cursor-local/cli";
 import { printOpenCodeStreamEvent } from "@paperclipai/adapter-opencode-local/cli";
+import { printQwenStreamEvent } from "@paperclipai/adapter-qwen-local/cli";
 import { printPiStreamEvent } from "@paperclipai/adapter-pi-local/cli";
 import { printOpenClawGatewayStreamEvent } from "@paperclipai/adapter-openclaw-gateway/cli";
 import { processCLIAdapter } from "./process/index.js";
@@ -28,6 +29,11 @@ const piLocalCLIAdapter: CLIAdapterModule = {
   formatStdoutEvent: printPiStreamEvent,
 };
 
+const qwenLocalCLIAdapter: CLIAdapterModule = {
+  type: "qwen_local",
+  formatStdoutEvent: printQwenStreamEvent,
+};
+
 const cursorLocalCLIAdapter: CLIAdapterModule = {
   type: "cursor",
   formatStdoutEvent: printCursorStreamEvent,
@@ -43,6 +49,7 @@ const adaptersByType = new Map<string, CLIAdapterModule>(
     claudeLocalCLIAdapter,
     codexLocalCLIAdapter,
     openCodeLocalCLIAdapter,
+    qwenLocalCLIAdapter,
     piLocalCLIAdapter,
     cursorLocalCLIAdapter,
     openclawGatewayCLIAdapter,

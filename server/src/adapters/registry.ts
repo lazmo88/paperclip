@@ -27,6 +27,16 @@ import {
   agentConfigurationDoc as openCodeAgentConfigurationDoc,
 } from "@paperclipai/adapter-opencode-local";
 import {
+  execute as qwenExecute,
+  listQwenModels,
+  testEnvironment as qwenTestEnvironment,
+  sessionCodec as qwenSessionCodec,
+} from "@paperclipai/adapter-qwen-local/server";
+import {
+  agentConfigurationDoc as qwenAgentConfigurationDoc,
+  models as qwenModels,
+} from "@paperclipai/adapter-qwen-local";
+import {
   execute as openclawGatewayExecute,
   testEnvironment as openclawGatewayTestEnvironment,
 } from "@paperclipai/adapter-openclaw-gateway/server";
@@ -111,11 +121,23 @@ const piLocalAdapter: ServerAdapterModule = {
   agentConfigurationDoc: piAgentConfigurationDoc,
 };
 
+const qwenLocalAdapter: ServerAdapterModule = {
+  type: "qwen_local",
+  execute: qwenExecute,
+  testEnvironment: qwenTestEnvironment,
+  sessionCodec: qwenSessionCodec,
+  models: qwenModels,
+  listModels: listQwenModels,
+  supportsLocalAgentJwt: true,
+  agentConfigurationDoc: qwenAgentConfigurationDoc,
+};
+
 const adaptersByType = new Map<string, ServerAdapterModule>(
   [
     claudeLocalAdapter,
     codexLocalAdapter,
     openCodeLocalAdapter,
+    qwenLocalAdapter,
     piLocalAdapter,
     cursorLocalAdapter,
     openclawGatewayAdapter,

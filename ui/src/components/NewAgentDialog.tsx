@@ -25,6 +25,7 @@ type AdvancedAdapterType =
   | "claude_local"
   | "codex_local"
   | "opencode_local"
+  | "qwen_local"
   | "pi_local"
   | "cursor"
   | "openclaw_gateway";
@@ -55,6 +56,12 @@ const ADVANCED_ADAPTER_OPTIONS: Array<{
     label: "OpenCode",
     icon: OpenCodeLogoIcon,
     desc: "Local multi-provider agent",
+  },
+  {
+    value: "qwen_local",
+    label: "Qwen Code",
+    icon: Terminal,
+    desc: "Local Qwen coding agent",
   },
   {
     value: "pi_local",

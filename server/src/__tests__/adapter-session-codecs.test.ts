@@ -9,6 +9,10 @@ import {
   sessionCodec as opencodeSessionCodec,
   isOpenCodeUnknownSessionError,
 } from "@paperclipai/adapter-opencode-local/server";
+import {
+  sessionCodec as qwenSessionCodec,
+  isQwenUnknownSessionError,
+} from "@paperclipai/adapter-qwen-local/server";
 
 describe("adapter session codecs", () => {
   it("normalizes claude session params with cwd", () => {
@@ -82,6 +86,24 @@ describe("adapter session codecs", () => {
     });
     expect(cursorSessionCodec.getDisplayId?.(serialized ?? null)).toBe("cursor-session-1");
   });
+
+  it("normalizes qwen session params with cwd", () => {
+    const parsed = qwenSessionCodec.deserialize({
+      sessionId: "qwen-session-1",
+      cwd: "/tmp/qwen",
+    });
+    expect(parsed).toEqual({
+      sessionId: "qwen-session-1",
+      cwd: "/tmp/qwen",
+    });
+
+    const serialized = qwenSessionCodec.serialize(parsed);
+    expect(serialized).toEqual({
+      sessionId: "qwen-session-1",
+      cwd: "/tmp/qwen",
+    });
+    expect(qwenSessionCodec.getDisplayId?.(serialized ?? null)).toBe("qwen-session-1");
+  });
 });
 
 describe("codex resume recovery detection", () => {
@@ -144,5 +166,13 @@ describe("cursor resume recovery detection", () => {
         "",
       ),
     ).toBe(false);
+  });
+});
+
+describe("qwen resume recovery detection", () => {
+  it("detects unknown session errors from qwen output", () => {
+    expect(isQwenUnknownSessionError("", "unknown session id abc")).toBe(true);
+    expect(isQwenUnknownSessionError("", "cannot resume session")).toBe(true);
+    expect(isQwenUnknownSessionError("{\"type\":\"result\"}", "")).toBe(false);
   });
 });

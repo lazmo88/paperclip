@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { models as codexFallbackModels } from "@paperclipai/adapter-codex-local";
 import { models as cursorFallbackModels } from "@paperclipai/adapter-cursor-local";
 import { resetOpenCodeModelsCacheForTests } from "@paperclipai/adapter-opencode-local/server";
+import { models as qwenFallbackModels } from "@paperclipai/adapter-qwen-local";
+import { resetQwenModelsCacheForTests } from "@paperclipai/adapter-qwen-local/server";
 import { listAdapterModels } from "../adapters/index.js";
 import { resetCodexModelsCacheForTests } from "../adapters/codex-models.js";
 import { resetCursorModelsCacheForTests, setCursorModelsRunnerForTests } from "../adapters/cursor-models.js";
@@ -10,10 +12,12 @@ describe("adapter model listing", () => {
   beforeEach(() => {
     delete process.env.OPENAI_API_KEY;
     delete process.env.PAPERCLIP_OPENCODE_COMMAND;
+    delete process.env.PAPERCLIP_QWEN_SETTINGS_PATH;
     resetCodexModelsCacheForTests();
     resetCursorModelsCacheForTests();
     setCursorModelsRunnerForTests(null);
     resetOpenCodeModelsCacheForTests();
+    resetQwenModelsCacheForTests();
     vi.restoreAllMocks();
   });
 
@@ -100,5 +104,50 @@ describe("adapter model listing", () => {
 
     const models = await listAdapterModels("opencode_local");
     expect(models).toEqual([]);
+  });
+
+  it("returns qwen fallback models when Qwen settings discovery is unavailable", async () => {
+    process.env.PAPERCLIP_QWEN_SETTINGS_PATH = "/tmp/__paperclip_missing_qwen_settings__.json";
+
+    const models = await listAdapterModels("qwen_local");
+    expect(models).toEqual(qwenFallbackModels);
+  });
+
+  it("loads qwen models from Qwen settings for the selected auth type", async () => {
+    const settingsPath = `/tmp/paperclip-qwen-settings-${Date.now()}-${Math.random().toString(16).slice(2)}.json`;
+    await import("node:fs/promises").then((fs) =>
+      fs.writeFile(
+        settingsPath,
+        JSON.stringify({
+          modelProviders: {
+            openai: [
+              { id: "qwen3.5-plus", name: "[Bailian Coding Plan] qwen3.5-plus" },
+              { id: "qwen3-coder-plus", name: "[Bailian Coding Plan] qwen3-coder-plus" },
+              { id: "kimi-k2.5", name: "[Bailian Coding Plan] kimi-k2.5" },
+            ],
+            anthropic: [
+              { id: "claude-sonnet-4.5", name: "Claude Sonnet 4.5" },
+            ],
+          },
+          security: {
+            auth: {
+              selectedType: "openai",
+            },
+          },
+        }),
+        "utf8",
+      ),
+    );
+    process.env.PAPERCLIP_QWEN_SETTINGS_PATH = settingsPath;
+
+    const first = await listAdapterModels("qwen_local");
+    const second = await listAdapterModels("qwen_local");
+
+    expect(first).toEqual(second);
+    expect(first).toEqual([
+      { id: "kimi-k2.5", label: "kimi-k2.5" },
+      { id: "qwen3-coder-plus", label: "qwen3-coder-plus" },
+      { id: "qwen3.5-plus", label: "qwen3.5-plus" },
+    ]);
   });
 });
