@@ -708,6 +708,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                   <ThinkingEffortDropdown
                     value={currentThinkingEffort}
                     options={thinkingEffortOptions}
+                    label={adapterType === "qwen_local" ? "Approval mode" : adapterType === "cursor" ? "Mode" : "Thinking effort"}
                     onChange={(v) => {
                       if (isCreate) {
                         set!({ thinkingEffort: v });
@@ -1422,17 +1423,19 @@ function ThinkingEffortDropdown({
   onChange,
   open,
   onOpenChange,
+  label = "Thinking effort",
 }: {
   value: string;
   options: ReadonlyArray<{ id: string; label: string }>;
   onChange: (id: string) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  label?: string;
 }) {
   const selected = options.find((option) => option.id === value) ?? options[0];
 
   return (
-    <Field label="Thinking effort" hint={help.thinkingEffort}>
+    <Field label={label} hint={help.thinkingEffort}>
       <Popover open={open} onOpenChange={onOpenChange}>
         <PopoverTrigger asChild>
           <button className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-sm hover:bg-accent/50 transition-colors w-full justify-between">

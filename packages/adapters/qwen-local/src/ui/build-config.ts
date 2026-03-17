@@ -1,5 +1,4 @@
 import type { CreateConfigValues } from "@paperclipai/adapter-utils";
-import { DEFAULT_QWEN_LOCAL_YOLO } from "../index.js";
 
 function parseCommaArgs(value: string): string[] {
   return value

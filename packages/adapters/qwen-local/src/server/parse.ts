@@ -42,7 +42,7 @@ function calculateCostFromTokens(
   inputTokens: number,
   outputTokens: number,
 ): number {
-  if (!model || inputTokens === 0) return 0;
+  if (!model || (inputTokens === 0 && outputTokens === 0)) return 0;
 
   // Try exact match first
   let pricing = QWEN_MODEL_PRICING[model];
@@ -58,12 +58,14 @@ function calculateCostFromTokens(
     }
   }
 
-  // Try prefix match (e.g., "qwen3-coder-plus-123" matches "qwen3-coder-plus")
+  // Try prefix match — prefer longer (more specific) keys first
+  // e.g., "glm-4-plus-2026" should match "glm-4-plus" not "glm-4"
   if (!pricing) {
     const lowerModel = model.toLowerCase();
-    for (const [key, value] of Object.entries(QWEN_MODEL_PRICING)) {
+    const sortedKeys = Object.keys(QWEN_MODEL_PRICING).sort((a, b) => b.length - a.length);
+    for (const key of sortedKeys) {
       if (lowerModel.startsWith(key.toLowerCase())) {
-        pricing = value;
+        pricing = QWEN_MODEL_PRICING[key];
         break;
       }
     }
