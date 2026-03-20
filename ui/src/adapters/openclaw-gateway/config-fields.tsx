@@ -70,7 +70,12 @@ function useGatewayModels(
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
 
   useEffect(() => {
-    if (!debouncedUrl) return;
+    if (!debouncedUrl || !token) {
+      setModels([]);
+      setError(null);
+      setLoading(false);
+      return;
+    }
 
     let cancelled = false;
     let ws: WebSocket | null = null;
@@ -139,7 +144,13 @@ function useGatewayAgents(
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
 
   useEffect(() => {
-    if (!debouncedAgentUrl) return;
+    if (!debouncedAgentUrl || !token) {
+      setAgents([]);
+      setDefaultId(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
 
     let cancelled = false;
     let ws: WebSocket | null = null;
