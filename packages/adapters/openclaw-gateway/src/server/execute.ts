@@ -508,7 +508,7 @@ function buildWakeText(payload: WakePayload, paperclipEnv: Record<string, string
       : [`PAPERCLIP_API_KEY=<token from ${claimedApiKeyPath}>`]),
     "",
     ...(authToken
-      ? ["PAPERCLIP_API_KEY has been injected above — use it directly."]
+      ? ["PAPERCLIP_API_KEY has been injected above — use it directly. ALWAYS use the key from THIS wake message; never reuse keys from prior runs. This key expires in 48 hours."]
       : [`Load PAPERCLIP_API_KEY from ${claimedApiKeyPath} (the token you saved after claim-api-key).`]),
     "",
     `api_base=${apiBaseHint}`,
