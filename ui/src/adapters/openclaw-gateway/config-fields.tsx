@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Eye, EyeOff, RefreshCw } from "lucide-react";
 import type { AdapterConfigFieldsProps } from "../types";
 import {
@@ -57,8 +57,6 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
   return debounced;
 }
 
-const NEGATIVE_CACHE_MS = 10_000;
-
 function useGatewayModels(
   wsUrl: string,
   token: string,
@@ -68,28 +66,16 @@ function useGatewayModels(
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const debouncedUrl = useDebouncedValue(wsUrl, 600);
-  const lastErrorAtRef = useRef<number>(0);
-  const lastErrorInputsRef = useRef<string>("");
 
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
 
   useEffect(() => {
     if (!debouncedUrl) return;
 
-    // Negative cache: skip fetch if last error was recent AND inputs haven't changed
-    const inputKey = `${debouncedUrl}|${token}`;
-    const sinceLast = Date.now() - lastErrorAtRef.current;
-    if (lastErrorAtRef.current > 0 && sinceLast < NEGATIVE_CACHE_MS && lastErrorInputsRef.current === inputKey) {
-      const retryTimer = setTimeout(() => setRefreshKey((k) => k + 1), NEGATIVE_CACHE_MS - sinceLast);
-      return () => clearTimeout(retryTimer);
-    }
-
     let cancelled = false;
     let ws: WebSocket | null = null;
-    const setNegativeCache = () => { lastErrorAtRef.current = Date.now(); lastErrorInputsRef.current = inputKey; };
-
     const timer = setTimeout(() => {
-      if (!cancelled) { setNegativeCache(); setError("Connection timed out"); setLoading(false); ws?.close(); }
+      if (!cancelled) { setError("Connection timed out"); setLoading(false); ws?.close(); }
     }, 15_000);
 
     setLoading(true);
@@ -97,7 +83,6 @@ function useGatewayModels(
 
     try { ws = new WebSocket(debouncedUrl); } catch (e) {
       setError(e instanceof Error ? e.message : "Invalid WebSocket URL");
-      setNegativeCache();
       setLoading(false); clearTimeout(timer); return;
     }
 
@@ -118,14 +103,13 @@ function useGatewayModels(
           return;
         }
         if (frame.type === "res" && frame.id === "c1") {
-          if (!frame.ok) { setNegativeCache(); setError(frame.error?.message ?? "Connect failed"); setLoading(false); clearTimeout(timer); ws?.close(); return; }
+          if (!frame.ok) { setError(frame.error?.message ?? "Connect failed"); setLoading(false); clearTimeout(timer); ws?.close(); return; }
           ws?.send(JSON.stringify({ type: "req", id: "ml", method: "models.list", params: {} }));
           return;
         }
         if (frame.type === "res" && frame.id === "ml") {
           clearTimeout(timer);
-          if (!frame.ok) { setNegativeCache(); setError(frame.error?.message ?? "models.list failed"); setLoading(false); ws?.close(); return; }
-          lastErrorAtRef.current = 0; // Clear negative cache on success
+          if (!frame.ok) { setError(frame.error?.message ?? "models.list failed"); setLoading(false); ws?.close(); return; }
           setModels((frame.payload as { models: GatewayModel[] }).models ?? []);
           setLoading(false);
           ws?.close();
@@ -133,7 +117,7 @@ function useGatewayModels(
       } catch { /* ignore */ }
     };
 
-    ws.onerror = () => { if (!cancelled) { setNegativeCache(); setError("WebSocket connection error"); setLoading(false); clearTimeout(timer); } };
+    ws.onerror = () => { if (!cancelled) { setError("WebSocket connection error"); setLoading(false); clearTimeout(timer); } };
     ws.onclose = () => { clearTimeout(timer); };
     return () => { cancelled = true; clearTimeout(timer); ws?.close(); };
   }, [debouncedUrl, token, refreshKey]);
