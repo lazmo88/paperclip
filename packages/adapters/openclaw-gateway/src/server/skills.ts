@@ -9,19 +9,43 @@ import {
   readPaperclipRuntimeSkillEntries,
   resolvePaperclipDesiredSkillNames,
 } from "@paperclipai/adapter-utils/server-utils";
+import { gatewayRpc } from "./gateway-rpc.js";
 
 const __moduleDir = path.dirname(fileURLToPath(import.meta.url));
+
+interface GatewaySkillInfo {
+  key?: string;
+  name?: string;
+  description?: string;
+  enabled?: boolean;
+  location?: string;
+  eligible?: boolean;
+  missingRequirements?: string[];
+}
+
+interface GatewaySkillsPayload {
+  skills?: GatewaySkillInfo[];
+}
+
+/**
+ * Query OpenClaw gateway for native skills via skills.status RPC.
+ * Returns empty array on failure (non-blocking — gateway may be offline).
+ */
+async function queryGatewaySkills(config: Record<string, unknown>): Promise<GatewaySkillInfo[]> {
+  const result = await gatewayRpc<GatewaySkillsPayload>(config, "skills.status", {}, 8_000);
+  if (!result.ok || !result.payload?.skills) return [];
+  return result.payload.skills;
+}
 
 /**
  * Build a skill snapshot for the OpenClaw Gateway adapter.
  *
- * Paperclip-bundled skills are listed from the adapter's local skills directory
- * and injected into the wake message at execution time (hash-based dedup).
- *
- * OpenClaw native skills (from the gateway's `~/.openclaw/workspace/skills/`)
- * are NOT listed here — they are managed by the gateway itself. The adapter can
- * query them via `skills.status` RPC at execution time and inject prompt-based
- * enable/disable instructions per session.
+ * Two skill sources:
+ * 1. Paperclip-bundled skills — listed from the adapter's local skills directory,
+ *    injected into the wake message at execution time (hash-based dedup).
+ * 2. OpenClaw native skills — queried via skills.status RPC from the gateway.
+ *    Displayed in the UI for visibility. Toggles saved in Paperclip config,
+ *    enforced via prompt instruction at execution time (soft control).
  */
 async function buildOpenClawSkillSnapshot(config: Record<string, unknown>): Promise<AdapterSkillSnapshot> {
   const availableEntries = await readPaperclipRuntimeSkillEntries(config, __moduleDir);
@@ -46,11 +70,31 @@ async function buildOpenClawSkillSnapshot(config: Record<string, unknown>): Prom
     requiredReason: entry.requiredReason ?? null,
   }));
 
+  // Query OpenClaw gateway for native skills
+  const gatewaySkills = await queryGatewaySkills(config);
+  for (const gs of gatewaySkills) {
+    const key = `openclaw/${gs.key || gs.name || "unknown"}`;
+    const isDesired = desiredSet.has(key);
+    entries.push({
+      key,
+      runtimeName: gs.name ?? gs.key ?? null,
+      desired: gs.enabled !== false && !desiredSet.has(key) ? true : isDesired,
+      managed: false,
+      state: gs.enabled !== false ? "installed" : "available",
+      origin: "user_installed",
+      originLabel: "OpenClaw Gateway",
+      readOnly: false,
+      sourcePath: gs.location ?? undefined,
+      targetPath: undefined,
+      detail: gs.description ?? null,
+    });
+  }
+
   const warnings: string[] = [];
 
   for (const desiredSkill of desiredSkills) {
-    if (availableEntries.some((e) => e.key === desiredSkill)) continue;
-    warnings.push(`Desired skill "${desiredSkill}" is not available from the Paperclip skills directory.`);
+    if (entries.some((e) => e.key === desiredSkill)) continue;
+    warnings.push(`Desired skill "${desiredSkill}" is not available.`);
     entries.push({
       key: desiredSkill,
       runtimeName: null,
@@ -62,7 +106,7 @@ async function buildOpenClawSkillSnapshot(config: Record<string, unknown>): Prom
       readOnly: false,
       sourcePath: undefined,
       targetPath: undefined,
-      detail: "Paperclip cannot find this skill in the adapter skills directory.",
+      detail: "Paperclip cannot find this skill.",
     });
   }
 
