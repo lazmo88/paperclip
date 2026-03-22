@@ -183,10 +183,27 @@ export async function gatewayRpc<T = unknown>(
         return;
       }
 
-      // Connect response → send RPC
+      // Connect response → send RPC (or auto-pair if needed)
       if (frame.type === "res" && frame.id === connectId) {
         if (!frame.ok) {
           const err = frame.error as Record<string, unknown> | undefined;
+          const errMsg = String(err?.message ?? "");
+          const isPairingRequired = errMsg.toLowerCase().includes("pairing required");
+          if (isPairingRequired && authToken && device) {
+            // Auto-approve pairing then retry
+            autoApprovePairing(urlStr, headers, authToken, device, role, scopes)
+              .then((pairOk) => {
+                if (pairOk) {
+                  // Retry the whole RPC call after successful pairing
+                  try { ws.close(); } catch { /* ignore */ }
+                  gatewayRpc<T>(config, method, params, timeoutMs).then(finish);
+                } else {
+                  finish({ ok: false, error: { code: "PAIRING_FAILED", message: "Auto-pairing failed. Approve the device manually in OpenClaw." } });
+                }
+              })
+              .catch(() => finish({ ok: false, error: { code: "PAIRING_ERROR", message: "Auto-pairing error" } }));
+            return;
+          }
           finish({ ok: false, error: { code: String(err?.code ?? "CONNECT_FAILED"), message: String(err?.message ?? "Gateway connect failed") } });
           return;
         }
@@ -207,5 +224,86 @@ export async function gatewayRpc<T = unknown>(
 
     ws.on("error", () => finish({ ok: false, error: { code: "WS_ERROR", message: "WebSocket connection error" } }));
     ws.on("close", () => { if (!done) finish({ ok: false, error: { code: "WS_CLOSED", message: "Connection closed before response" } }); });
+  });
+}
+
+/**
+ * Attempt to auto-approve a pending device pairing request.
+ * Opens a separate WS connection with pairing scopes, finds pending request, approves it.
+ */
+async function autoApprovePairing(
+  url: string,
+  headers: Record<string, string>,
+  authToken: string,
+  device: DeviceIdentity,
+  role: string,
+  scopes: string[],
+): Promise<boolean> {
+  const approvalScopes = [...new Set([...scopes, "operator.pairing"])];
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (ok: boolean) => { if (!done) { done = true; clearTimeout(timer); try { pairWs.close(); } catch { /* */ } resolve(ok); } };
+    const timer = setTimeout(() => finish(false), 15_000);
+
+    let pairWs: WebSocket;
+    try { pairWs = new WebSocket(url, { headers, maxPayload: 2 * 1024 * 1024 }); } catch { return resolve(false); }
+
+    const connId = randomUUID();
+    const listId = randomUUID();
+    const approveId = randomUUID();
+
+    pairWs.on("message", (raw) => {
+      let frame: Record<string, unknown>;
+      try { frame = JSON.parse(rawDataToString(raw)); } catch { return; }
+
+      if (frame.type === "event" && frame.event === "connect.challenge") {
+        const nonce = String((frame.payload as Record<string, unknown>)?.nonce ?? "");
+        const signedAtMs = Date.now();
+        const payload = buildDeviceAuthPayloadV3({
+          deviceId: device.deviceId, clientId: "gateway-client", clientMode: "backend",
+          role, scopes: approvalScopes, signedAtMs, token: authToken, nonce,
+        });
+        pairWs.send(JSON.stringify({
+          type: "req", id: connId, method: "connect",
+          params: {
+            minProtocol: 3, maxProtocol: 3,
+            client: { id: "gateway-client", version: "paperclip", platform: process.platform, mode: "backend" },
+            role, scopes: approvalScopes,
+            auth: { token: authToken },
+            device: {
+              id: device.deviceId, publicKey: device.publicKeyRawBase64Url,
+              signature: signDevicePayload(device.privateKeyPem, payload),
+              signedAt: signedAtMs, nonce,
+            },
+          },
+        }));
+        return;
+      }
+
+      if (frame.type === "res" && frame.id === connId) {
+        if (!frame.ok) { finish(false); return; }
+        pairWs.send(JSON.stringify({ type: "req", id: listId, method: "device.pair.list", params: {} }));
+        return;
+      }
+
+      if (frame.type === "res" && frame.id === listId) {
+        if (!frame.ok) { finish(false); return; }
+        const pending = Array.isArray((frame.payload as Record<string, unknown>)?.pending)
+          ? ((frame.payload as Record<string, unknown>).pending as Array<Record<string, unknown>>)
+          : [];
+        const match = pending.find((e) => String(e.deviceId ?? "") === device.deviceId) ?? pending[pending.length - 1];
+        const requestId = match ? String(match.requestId ?? "") : "";
+        if (!requestId) { finish(false); return; }
+        pairWs.send(JSON.stringify({ type: "req", id: approveId, method: "device.pair.approve", params: { requestId } }));
+        return;
+      }
+
+      if (frame.type === "res" && frame.id === approveId) {
+        finish(frame.ok === true);
+      }
+    });
+
+    pairWs.on("error", () => finish(false));
+    pairWs.on("close", () => { if (!done) finish(false); });
   });
 }
