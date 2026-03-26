@@ -32,14 +32,22 @@ Gateway connect identity fields:
 Request behavior fields:
 - payloadTemplate (object, optional): additional fields merged into gateway agent params
 - workspaceRuntime (object, optional): desired runtime service intents; Paperclip forwards these in a standardized paperclip.workspaceRuntime block for remote execution environments
+- thinking (boolean, optional): enable thinking mode for supported models (default false)
 - timeoutSec (number, optional): adapter timeout in seconds (default 120)
 - waitTimeoutMs (number, optional): agent.wait timeout override (default timeoutSec * 1000)
 - autoPairOnFirstConnect (boolean, optional): on first "pairing required", attempt device.pair.list/device.pair.approve via shared auth, then retry once (default true)
 - paperclipApiUrl (string, optional): absolute Paperclip base URL advertised in wake text
 
+Agent targeting fields:
+- agentId (string, optional): OpenClaw agent ID to route to; auto-discovered via agents.list RPC in UI dropdown
+- model (string, optional): LLM model override in provider/model format (e.g. claude-max/opus); auto-discovered via models.list RPC in UI dropdown
+
 Session routing fields:
-- sessionKeyStrategy (string, optional): issue (default), fixed, or run
-- sessionKey (string, optional): fixed session key when strategy=fixed (default paperclip)
+- sessionKeyStrategy (string, optional): project (default), issue, fixed, or run
+- sessionKey (string, optional): custom session key when strategy=fixed (omit for default)
+- When agentId is set, session keys are automatically prefixed with the agent ID for per-agent isolation
+- For project/issue/run: paperclip:{agentId}:{strategy}:{id} (e.g. paperclip:dev:project:{projectId})
+- For fixed: paperclip:{agentId}:{sessionKey} (or just paperclip:{agentId} when sessionKey is omitted)
 
 Standard outbound payload additions:
 - paperclip (object): standardized Paperclip context added to every gateway agent request

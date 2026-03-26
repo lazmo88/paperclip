@@ -48,12 +48,15 @@ import {
 import {
   execute as openclawGatewayExecute,
   testEnvironment as openclawGatewayTestEnvironment,
+  listOpenClawSkills,
+  syncOpenClawSkills,
 } from "@paperclipai/adapter-openclaw-gateway/server";
 import {
   agentConfigurationDoc as openclawGatewayAgentConfigurationDoc,
   models as openclawGatewayModels,
 } from "@paperclipai/adapter-openclaw-gateway";
 import { listCodexModels } from "./codex-models.js";
+import { listOpenClawModels } from "./openclaw-models.js";
 import { listCursorModels } from "./cursor-models.js";
 import {
   execute as piExecute,
@@ -134,12 +137,18 @@ const geminiLocalAdapter: ServerAdapterModule = {
   agentConfigurationDoc: geminiAgentConfigurationDoc,
 };
 
+// TODO: listModels currently uses a global default gateway URL/token, not the agent's
+// configured gateway. The listAdapterModels() API doesn't support per-agent config
+// passthrough yet — model dropdown may show models from the wrong gateway.
 const openclawGatewayAdapter: ServerAdapterModule = {
   type: "openclaw_gateway",
   execute: openclawGatewayExecute,
   testEnvironment: openclawGatewayTestEnvironment,
+  listSkills: listOpenClawSkills,
+  syncSkills: syncOpenClawSkills,
   models: openclawGatewayModels,
-  supportsLocalAgentJwt: false,
+  listModels: listOpenClawModels,
+  supportsLocalAgentJwt: true,
   agentConfigurationDoc: openclawGatewayAgentConfigurationDoc,
 };
 
