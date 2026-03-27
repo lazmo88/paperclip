@@ -70,6 +70,7 @@ import {
   ArrowLeft,
   HelpCircle,
   FolderOpen,
+  Search,
 } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -1637,7 +1638,8 @@ function PromptsTab({
     agent.adapterType === "opencode_local" ||
     agent.adapterType === "pi_local" ||
     agent.adapterType === "hermes_local" ||
-    agent.adapterType === "cursor";
+    agent.adapterType === "cursor" ||
+    agent.adapterType === "openclaw_gateway";
 
   const { data: bundle, isLoading: bundleLoading } = useQuery({
     queryKey: queryKeys.agents.instructionsBundle(agent.id),
@@ -2348,12 +2350,16 @@ function AgentSkillsTab({
     adapterEntry: AgentSkillEntry | null;
   };
 
+  type SkillFilter = "all" | "active" | "disabled" | "openclaw" | "paperclip";
+
   const queryClient = useQueryClient();
   const [skillDraft, setSkillDraft] = useState<string[]>([]);
   const [lastSavedSkills, setLastSavedSkills] = useState<string[]>([]);
   const lastSavedSkillsRef = useRef<string[]>([]);
   const hasHydratedSkillSnapshotRef = useRef(false);
   const skipNextSkillAutosaveRef = useRef(true);
+  const [skillSearch, setSkillSearch] = useState("");
+  const [skillFilter, setSkillFilter] = useState<SkillFilter>("all");
 
   const { data: skillSnapshot, isLoading } = useQuery({
     queryKey: queryKeys.agents.skills(agent.id),
@@ -2367,12 +2373,30 @@ function AgentSkillsTab({
     enabled: Boolean(companyId),
   });
 
+  const syncCooldownRef = useRef(false);
+
   const syncSkills = useMutation({
     mutationFn: (desiredSkills: string[]) => agentsApi.syncSkills(agent.id, desiredSkills, companyId),
     onSuccess: async (snapshot) => {
+      // Align draft with what server actually saved to prevent re-sync loop.
+      // Merge: preserve any toggles the user made while the request was in flight.
+      const serverDesired = snapshot.desiredSkills;
       queryClient.setQueryData(queryKeys.agents.skills(agent.id), snapshot);
-      lastSavedSkillsRef.current = snapshot.desiredSkills;
-      setLastSavedSkills(snapshot.desiredSkills);
+      const previousSaved = lastSavedSkillsRef.current;
+      lastSavedSkillsRef.current = serverDesired;
+      setLastSavedSkills(serverDesired);
+      setSkillDraft((currentDraft) => {
+        // Find skills added/removed by the user since we submitted
+        const added = currentDraft.filter((k) => !previousSaved.includes(k) && !serverDesired.includes(k));
+        const removed = new Set(previousSaved.filter((k) => !currentDraft.includes(k)));
+        // Start from server state, apply user's in-flight additions, remove their removals
+        const merged = [...serverDesired.filter((k) => !removed.has(k)), ...added];
+        return merged;
+      });
+      skipNextSkillAutosaveRef.current = true;
+      // Cooldown: block autosave for 1s after sync to prevent loops
+      syncCooldownRef.current = true;
+      window.setTimeout(() => { syncCooldownRef.current = false; }, 1000);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.agents.detail(agent.id) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.agents.detail(agent.urlKey) }),
@@ -2386,6 +2410,9 @@ function AgentSkillsTab({
     lastSavedSkillsRef.current = [];
     hasHydratedSkillSnapshotRef.current = false;
     skipNextSkillAutosaveRef.current = true;
+    syncCooldownRef.current = false;
+    setSkillSearch("");
+    setSkillFilter("all");
   }, [agent.id]);
 
   useEffect(() => {
@@ -2411,6 +2438,7 @@ function AgentSkillsTab({
       skipNextSkillAutosaveRef.current = false;
       return;
     }
+    if (syncCooldownRef.current) return;
     if (syncSkills.isPending) return;
     if (arraysEqual(skillDraft, lastSavedSkillsRef.current)) return;
 
@@ -2474,10 +2502,54 @@ function AgentSkillsTab({
         }),
     [companySkillByKey, skillSnapshot],
   );
+  const isOpenClawGateway = agent.adapterType === "openclaw_gateway";
+  const gatewaySkillRows = useMemo<SkillRow[]>(
+    () =>
+      !isOpenClawGateway
+        ? []
+        : (skillSnapshot?.entries ?? [])
+            .filter((entry) => !companySkillKeys.has(entry.key) && entry.origin === "user_installed" && !entry.readOnly)
+            .map((entry) => ({
+              id: `gateway:${entry.key}`,
+              key: entry.key,
+              name: entry.runtimeName ?? entry.key,
+              description: entry.detail ?? null,
+              detail: null,
+              locationLabel: entry.locationLabel ?? null,
+              originLabel: "OpenClaw gateway skill",
+              linkTo: null,
+              readOnly: false,
+              adapterEntry: entry,
+            })),
+    [companySkillKeys, isOpenClawGateway, skillSnapshot],
+  );
+  const gatewayUnavailableRows = useMemo<SkillRow[]>(
+    () =>
+      !isOpenClawGateway
+        ? []
+        : (skillSnapshot?.entries ?? [])
+            .filter((entry) => !companySkillKeys.has(entry.key) && entry.origin === "user_installed" && entry.readOnly)
+            .map((entry) => ({
+              id: `gateway-unavail:${entry.key}`,
+              key: entry.key,
+              name: entry.runtimeName ?? entry.key,
+              description: entry.detail ?? null,
+              detail: null,
+              locationLabel: entry.locationLabel ?? null,
+              originLabel: entry.originLabel ?? "OpenClaw gateway skill",
+              linkTo: null,
+              readOnly: true,
+              adapterEntry: entry,
+            })),
+    [companySkillKeys, isOpenClawGateway, skillSnapshot],
+  );
   const unmanagedSkillRows = useMemo<SkillRow[]>(
     () =>
       (skillSnapshot?.entries ?? [])
-        .filter((entry) => isReadOnlyUnmanagedSkillEntry(entry, companySkillKeys))
+        .filter((entry) => {
+          if (isOpenClawGateway && entry.origin === "user_installed") return false;
+          return isReadOnlyUnmanagedSkillEntry(entry, companySkillKeys);
+        })
         .map((entry) => ({
           id: `external:${entry.key}`,
           key: entry.key,
@@ -2490,10 +2562,14 @@ function AgentSkillsTab({
           readOnly: true,
           adapterEntry: entry,
         })),
-    [companySkillKeys, skillSnapshot],
+    [companySkillKeys, isOpenClawGateway, skillSnapshot],
   );
   const desiredOnlyMissingSkills = useMemo(
-    () => skillDraft.filter((key) => !companySkillByKey.has(key)),
+    () => skillDraft.filter((key) => {
+      // External gateway skills (e.g. "openclaw/bird") are not in the company library — that's expected
+      if (key.includes("/") && !key.startsWith("paperclipai/")) return false;
+      return !companySkillByKey.has(key);
+    }),
     [companySkillByKey, skillDraft],
   );
   const skillApplicationLabel = useMemo(() => {
@@ -2511,7 +2587,7 @@ function AgentSkillsTab({
   const unsupportedSkillMessage = useMemo(() => {
     if (skillSnapshot?.mode !== "unsupported") return null;
     if (agent.adapterType === "openclaw_gateway") {
-      return "Paperclip cannot manage OpenClaw skills here. Visit your OpenClaw instance to manage this agent's skills.";
+      return "OpenClaw native skills are managed by the gateway. Paperclip-bundled skills can be toggled here and are injected per-session.";
     }
     return "Paperclip cannot manage skills for this adapter yet. Manage them in the adapter directly.";
   }, [agent.adapterType, skillSnapshot?.mode]);
@@ -2521,6 +2597,88 @@ function AgentSkillsTab({
     : hasUnsavedChanges
       ? "Saving soon..."
       : null;
+
+  // Combine all toggleable rows for filtering/search/bulk actions
+  const allToggleableRows = useMemo(() => {
+    return [...optionalSkillRows, ...gatewaySkillRows].filter((r) => !r.readOnly);
+  }, [optionalSkillRows, gatewaySkillRows]);
+
+  const searchLower = skillSearch.toLowerCase();
+
+  const filterRow = useCallback(
+    (row: SkillRow) => {
+      // Search filter
+      if (searchLower && !row.name.toLowerCase().includes(searchLower) && !row.key.toLowerCase().includes(searchLower) && !(row.description ?? "").toLowerCase().includes(searchLower)) {
+        return false;
+      }
+      // Status/source filter
+      const isActive = skillDraft.includes(row.key);
+      switch (skillFilter) {
+        case "active":
+          return isActive;
+        case "disabled":
+          return !isActive;
+        case "openclaw":
+          return row.key.startsWith("openclaw/");
+        case "paperclip":
+          return !row.key.startsWith("openclaw/");
+        default:
+          return true;
+      }
+    },
+    [searchLower, skillFilter, skillDraft],
+  );
+
+  const filteredOptionalRows = useMemo(() => optionalSkillRows.filter(filterRow), [optionalSkillRows, filterRow]);
+  const filteredGatewayRows = useMemo(() => gatewaySkillRows.filter(filterRow), [gatewaySkillRows, filterRow]);
+
+  const visibleToggleableKeys = useMemo(
+    () => [...filteredOptionalRows, ...filteredGatewayRows].filter((r) => !r.readOnly).map((r) => r.key),
+    [filteredOptionalRows, filteredGatewayRows],
+  );
+  const allVisibleActive = visibleToggleableKeys.length > 0 && visibleToggleableKeys.every((k) => skillDraft.includes(k));
+  const someVisibleActive = visibleToggleableKeys.some((k) => skillDraft.includes(k));
+
+  const handleEnableVisible = useCallback(() => {
+    setSkillDraft((prev) => Array.from(new Set([...prev, ...visibleToggleableKeys])));
+  }, [visibleToggleableKeys]);
+
+  const requiredKeys = useMemo(
+    () => new Set((skillSnapshot?.entries ?? []).filter((e) => e.required).map((e) => e.key)),
+    [skillSnapshot],
+  );
+
+  const handleDisableVisible = useCallback(() => {
+    const removeSet = new Set(visibleToggleableKeys);
+    setSkillDraft((prev) => prev.filter((k) => !removeSet.has(k) || requiredKeys.has(k)));
+  }, [visibleToggleableKeys, requiredKeys]);
+
+  const filterButtons: { value: SkillFilter; label: string }[] = [
+    { value: "all", label: "All" },
+    { value: "active", label: "Active" },
+    { value: "disabled", label: "Disabled" },
+    ...(isOpenClawGateway ? [
+      { value: "openclaw" as SkillFilter, label: "OpenClaw" },
+      { value: "paperclip" as SkillFilter, label: "Paperclip" },
+    ] : []),
+  ];
+
+  const activeCount = allToggleableRows.filter((r) => skillDraft.includes(r.key)).length;
+  const totalCount = allToggleableRows.length;
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  const handleResetToGatewayDefaults = useCallback(() => {
+    // Reset: enable only gateway-enabled skills + required Paperclip skills.
+    // Disable company library skills and gateway-disabled skills.
+    const gatewayEnabled = (skillSnapshot?.entries ?? [])
+      .filter((e) => e.origin === "user_installed" && e.locationLabel === "Gateway: enabled")
+      .map((e) => e.key);
+    const required = (skillSnapshot?.entries ?? [])
+      .filter((e) => e.required)
+      .map((e) => e.key);
+    setSkillDraft(Array.from(new Set([...required, ...gatewayEnabled])));
+    setShowResetConfirm(false);
+  }, [skillSnapshot]);
 
   return (
     <div className="max-w-4xl space-y-5">
@@ -2552,6 +2710,91 @@ function AgentSkillsTab({
           {unsupportedSkillMessage}
         </div>
       ) : null}
+
+      {!isLoading && totalCount > 0 && (
+        <div className="space-y-3">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={skillSearch}
+              onChange={(e) => setSkillSearch(e.target.value)}
+              placeholder={`Search ${totalCount} skills...`}
+              className="pl-9 text-sm"
+            />
+          </div>
+
+          {/* Filters + Bulk Actions */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex gap-1">
+              {filterButtons.map((f) => (
+                <button
+                  key={f.value}
+                  onClick={() => setSkillFilter(f.value)}
+                  className={cn(
+                    "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                    skillFilter === f.value
+                      ? "bg-foreground text-background"
+                      : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
+                  )}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">{activeCount}/{totalCount} active</span>
+              <button
+                onClick={handleEnableVisible}
+                disabled={allVisibleActive || visibleToggleableKeys.length === 0}
+                className="rounded-md px-2 py-1 text-xs font-medium text-foreground bg-muted hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Enable {skillSearch || skillFilter !== "all" ? "filtered" : "all"}
+              </button>
+              <button
+                onClick={handleDisableVisible}
+                disabled={!someVisibleActive || visibleToggleableKeys.length === 0}
+                className="rounded-md px-2 py-1 text-xs font-medium text-foreground bg-muted hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Disable {skillSearch || skillFilter !== "all" ? "filtered" : "all"}
+              </button>
+              {isOpenClawGateway && (
+                <button
+                  onClick={() => setShowResetConfirm(true)}
+                  className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground bg-muted hover:bg-accent hover:text-foreground transition-colors"
+                >
+                  Reset to defaults
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showResetConfirm && (
+        <div className="rounded-xl border border-amber-300/60 bg-amber-50/60 px-4 py-3 dark:border-amber-500/30 dark:bg-amber-950/20">
+          <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+            Reset skill selection to match OpenClaw gateway defaults?
+          </p>
+          <p className="mt-1 text-xs text-amber-700 dark:text-amber-300/80">
+            This will enable only gateway-enabled skills and required Paperclip skills. Company library skills will be disabled.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={handleResetToGatewayDefaults}
+              className="rounded-md bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700 transition-colors"
+            >
+              Reset
+            </button>
+            <button
+              onClick={() => setShowResetConfirm(false)}
+              className="rounded-md bg-muted px-3 py-1 text-xs font-medium text-foreground hover:bg-accent transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {isLoading ? (
         <PageSkeleton variant="list" />
@@ -2649,7 +2892,7 @@ function AgentSkillsTab({
               );
             };
 
-            if (optionalSkillRows.length === 0 && requiredSkillRows.length === 0 && unmanagedSkillRows.length === 0) {
+            if (optionalSkillRows.length === 0 && requiredSkillRows.length === 0 && unmanagedSkillRows.length === 0 && gatewaySkillRows.length === 0 && gatewayUnavailableRows.length === 0) {
               return (
                 <section className="border-y border-border">
                   <div className="px-3 py-6 text-sm text-muted-foreground">
@@ -2661,13 +2904,13 @@ function AgentSkillsTab({
 
             return (
               <>
-                {optionalSkillRows.length > 0 && (
+                {filteredOptionalRows.length > 0 && (
                   <section className="border-y border-border">
-                    {optionalSkillRows.map(renderSkillRow)}
+                    {filteredOptionalRows.map(renderSkillRow)}
                   </section>
                 )}
 
-                {requiredSkillRows.length > 0 && (
+                {(!skillSearch && skillFilter === "all" || skillFilter === "paperclip") && requiredSkillRows.length > 0 && (
                   <section className="border-y border-border">
                     <div className="border-b border-border bg-muted/40 px-3 py-2">
                       <span className="text-xs font-medium text-muted-foreground">
@@ -2675,6 +2918,34 @@ function AgentSkillsTab({
                       </span>
                     </div>
                     {requiredSkillRows.map(renderSkillRow)}
+                  </section>
+                )}
+
+                {filteredGatewayRows.length > 0 && (
+                  <section className="border-y border-border">
+                    <div className="border-b border-border bg-muted/40 px-3 py-2">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        OpenClaw gateway skills (prompt-enforced per session)
+                      </span>
+                    </div>
+                    {filteredGatewayRows.map(renderSkillRow)}
+                  </section>
+                )}
+
+                {filteredOptionalRows.length === 0 && filteredGatewayRows.length === 0 && (skillSearch || skillFilter !== "all") && (
+                  <div className="px-3 py-6 text-sm text-muted-foreground text-center">
+                    No skills match{skillSearch ? ` "${skillSearch}"` : ""}{skillFilter !== "all" ? ` (${skillFilter})` : ""}
+                  </div>
+                )}
+
+                {gatewayUnavailableRows.length > 0 && (
+                  <section className="border-y border-border">
+                    <div className="border-b border-border bg-muted/40 px-3 py-2">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        Unavailable on gateway ({gatewayUnavailableRows.length})
+                      </span>
+                    </div>
+                    {gatewayUnavailableRows.map(renderSkillRow)}
                   </section>
                 )}
 

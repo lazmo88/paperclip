@@ -563,10 +563,21 @@ export function agentRoutes(db: Db) {
       };
     }
 
-    const resolvedRequestedSkills = await companySkills.resolveRequestedSkillKeys(
-      companyId,
-      requestedDesiredSkills,
-    );
+    // External gateway skills (e.g. "openclaw/bird") bypass company skill validation.
+    // Only treat keys with known adapter prefixes as external — plain slash-delimited
+    // company skill keys (e.g. "team/my-skill") should go through normal resolution.
+    // Only apply this bypass logic for openclaw_gateway adapters to avoid security issues.
+    const allowExternalSkillKeys = adapterType === "openclaw_gateway";
+    const externalSkillKeys = allowExternalSkillKeys
+      ? requestedDesiredSkills.filter((key) => key.startsWith("openclaw/"))
+      : [];
+    const companySkillRefs = allowExternalSkillKeys
+      ? requestedDesiredSkills.filter((key) => !key.startsWith("openclaw/"))
+      : requestedDesiredSkills;
+    const resolvedCompanySkills = companySkillRefs.length > 0
+      ? await companySkills.resolveRequestedSkillKeys(companyId, companySkillRefs)
+      : [];
+    const resolvedRequestedSkills = [...resolvedCompanySkills, ...externalSkillKeys];
     const runtimeSkillEntries = await companySkills.listRuntimeSkillEntries(companyId, {
       materializeMissing: shouldMaterializeRuntimeSkillsForAdapter(adapterType),
     });
